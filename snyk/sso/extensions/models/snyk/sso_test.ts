@@ -175,7 +175,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-sso", version: 1, tags: {} },
@@ -197,7 +197,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/groups/test-org-123/sso_connections");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -251,7 +251,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-sso", version: 1, tags: {} },
@@ -279,7 +279,7 @@ Deno.test({
         "/groups/test-org-123/sso_connections/test-id-123/users",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -316,7 +316,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-sso", version: 1, tags: {} },
@@ -344,7 +344,7 @@ Deno.test({
         "/groups/test-org-123/sso_connections/test-id-123/users/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -387,7 +387,7 @@ Deno.test({
       const { context } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-sso", version: 1, tags: {} },

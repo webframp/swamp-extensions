@@ -29,14 +29,20 @@ Deno.test("assets model: has globalArguments with apiToken", () => {
 
 Deno.test("assets model: has expected methods", () => {
   assertExists(model.methods);
+  assertExists(model.methods.list_repository_aliases_in_group);
+  assertExists(model.methods.create_alias_in_group);
+  assertExists(model.methods.delete_aliases_in_group);
   assertExists(model.methods.list_assets);
   assertExists(model.methods.get_asset);
+  assertExists(model.methods.update_asset);
   assertExists(model.methods.list_related_assets);
   assertExists(model.methods.list_asset_projects);
 });
 
 Deno.test("assets model: has expected resources", () => {
   assertExists(model.resources);
+  assertExists(model.resources["repository_aliases_in_group"]);
+  assertExists(model.resources["alias_in_group"]);
   assertExists(model.resources["list_assets"]);
   assertExists(model.resources["asset"]);
   assertExists(model.resources["related_assets"]);
@@ -158,6 +164,192 @@ function installFetchMock(mockUrl: string): () => void {
 }
 
 Deno.test({
+  name:
+    "assets model: list_repository_aliases_in_group fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": { "new_url": "test-value", "url": "test-value" },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "GET /groups/test-org-123/assets/repository/aliases": {
+        data: [mockItem],
+        isCollection: true,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2026-09-09",
+          "groupId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_repository_aliases_in_group.execute(
+        { "url": "a b&c=d" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertEquals(req0.path, "/groups/test-org-123/assets/repository/aliases");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2026-09-09");
+      assertEquals(query.get("limit"), "100");
+      assertEquals(query.getAll("url"), ["a b&c=d"]);
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "repository_aliases_in_group");
+      assertValidResource("repository_aliases_in_group", resources[0].data);
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(data.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: create_alias_in_group creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockSnykServer({
+      "POST /groups/test-org-123/assets/repository/aliases": { status: 204 },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2026-09-09",
+          "groupId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_alias_in_group.execute({ "data": [] }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertEquals(req0.path, "/groups/test-org-123/assets/repository/aliases");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2026-09-09");
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertEquals(req0.body, { "data": [] });
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "alias_in_group");
+      assertValidResource("alias_in_group", resources[0].data);
+      assertEquals(resources[0].name, "created");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: delete_aliases_in_group executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockSnykServer({
+      "DELETE /groups/test-org-123/assets/repository/aliases": { status: 204 },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2026-09-09",
+          "groupId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_aliases_in_group.execute({ "data": [] }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "DELETE");
+      assertEquals(req0.path, "/groups/test-org-123/assets/repository/aliases");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2026-09-09");
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertEquals(req0.body, { "data": [] });
+
+      assertEquals(getWrittenResources().length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "assets model: list_assets executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
@@ -169,7 +361,7 @@ Deno.test({
         "archived": true,
         "base_image": "test-value",
         "browse_url": "https://example.com",
-        "class": { "locked": true, "name": "A", "rank": 1 },
+        "class": { "display_name": "A", "locked": true, "rank": 1 },
         "coverage_controls": [],
         "created_at": "2024-01-01T00:00:00Z",
         "default_branch_name": "main",
@@ -181,13 +373,15 @@ Deno.test({
         "image_registries": [],
         "image_repositories": [],
         "image_tags": [],
+        "labels": [],
         "languages": {},
         "name": "test-value",
+        "removed_reasons": [],
         "repository_freshness": "test-value",
         "repository_url": "test-value",
         "risk_factors": [],
         "sources": [],
-        "tags": [],
+        "tags": {},
         "updated_at": "2024-01-01T00:00:00Z",
         "assets_id": "test-value",
         "organizations_id": "test-value",
@@ -203,7 +397,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: {
@@ -230,7 +424,7 @@ Deno.test({
       assertEquals(req0.method, "POST");
       assertEquals(req0.path, "/groups/test-org-123/assets/search");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {});
@@ -260,7 +454,7 @@ Deno.test({
         "archived": true,
         "base_image": "test-value",
         "browse_url": "https://example.com",
-        "class": { "locked": true, "name": "A", "rank": 1 },
+        "class": { "display_name": "A", "locked": true, "rank": 1 },
         "coverage_controls": [],
         "created_at": "2024-01-01T00:00:00Z",
         "default_branch_name": "main",
@@ -272,13 +466,15 @@ Deno.test({
         "image_registries": [],
         "image_repositories": [],
         "image_tags": [],
+        "labels": [],
         "languages": {},
         "name": "test-value",
+        "removed_reasons": [],
         "repository_freshness": "test-value",
         "repository_url": "test-value",
         "risk_factors": [],
         "sources": [],
-        "tags": [],
+        "tags": {},
         "updated_at": "2024-01-01T00:00:00Z",
         "assets_id": "test-value",
         "organizations_id": "test-value",
@@ -294,7 +490,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: {
@@ -321,7 +517,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/groups/test-org-123/assets/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -332,6 +528,101 @@ Deno.test({
       assertEquals(resources[0].name, "test-id-123");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: update_asset executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "app_context": {},
+        "archived": true,
+        "base_image": "test-value",
+        "browse_url": "https://example.com",
+        "class": { "display_name": "A", "locked": true, "rank": 1 },
+        "coverage_controls": [],
+        "created_at": "2024-01-01T00:00:00Z",
+        "default_branch_name": "main",
+        "developers": [],
+        "file_path": "test-value",
+        "id_from_source": "610306547",
+        "image_digests": [],
+        "image_id": "test-value",
+        "image_registries": [],
+        "image_repositories": [],
+        "image_tags": [],
+        "labels": [],
+        "languages": {},
+        "name": "test-value",
+        "removed_reasons": [],
+        "repository_freshness": "test-value",
+        "repository_url": "test-value",
+        "risk_factors": [],
+        "sources": [],
+        "tags": {},
+        "updated_at": "2024-01-01T00:00:00Z",
+        "assets_id": "test-value",
+        "organizations_id": "test-value",
+        "projects_id": "test-value",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "PATCH /groups/test-org-123/assets/test-id-123": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2026-09-09",
+          "groupId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_asset.execute(
+        { "asset_id": "test-id-123", "data": null },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertEquals(req0.path, "/groups/test-org-123/assets/test-id-123");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2026-09-09");
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertEquals(req0.body, { "data": null });
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset");
+      assertValidResource("asset", resources[0].data);
+      assertEquals(resources[0].name, "test-id-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -351,7 +642,7 @@ Deno.test({
         "archived": true,
         "base_image": "test-value",
         "browse_url": "https://example.com",
-        "class": { "locked": true, "name": "A", "rank": 1 },
+        "class": { "display_name": "A", "locked": true, "rank": 1 },
         "coverage_controls": [],
         "created_at": "2024-01-01T00:00:00Z",
         "default_branch_name": "main",
@@ -363,13 +654,15 @@ Deno.test({
         "image_registries": [],
         "image_repositories": [],
         "image_tags": [],
+        "labels": [],
         "languages": {},
         "name": "test-value",
+        "removed_reasons": [],
         "repository_freshness": "test-value",
         "repository_url": "test-value",
         "risk_factors": [],
         "sources": [],
-        "tags": [],
+        "tags": {},
         "updated_at": "2024-01-01T00:00:00Z",
         "assets_id": "test-value",
         "organizations_id": "test-value",
@@ -388,7 +681,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: {
@@ -421,7 +714,7 @@ Deno.test({
         "/groups/test-org-123/assets/test-id-123/relationships/assets",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("type"), ["repository"]);
       assertEquals(req0.headers["authorization"], "token test-token");
@@ -478,7 +771,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: {
@@ -508,7 +801,7 @@ Deno.test({
         "/groups/test-org-123/assets/test-id-123/relationships/projects",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -532,7 +825,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "assets model: list_assets surfaces API errors",
+  name: "assets model: list_repository_aliases_in_group surfaces API errors",
   sanitizeResources: false,
   fn: async () => {
     // A server that returns 500 for every request, exercising the error path.
@@ -562,7 +855,7 @@ Deno.test({
       const { context } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "groupId": "test-org-123",
         },
         definition: {
@@ -583,7 +876,7 @@ Deno.test({
               ctx: unknown,
             ) => Promise<{ dataHandles: unknown[] }>;
           }
-        >).list_assets.execute({}, context);
+        >).list_repository_aliases_in_group.execute({}, context);
       } catch (_err) {
         threw = true;
       }

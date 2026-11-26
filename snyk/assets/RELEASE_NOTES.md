@@ -1,21 +1,11 @@
-## 2026.11.05.1
+## 2026.11.26.1
 
-**Changed:** Regenerated from the current Snyk OpenAPI spec. The asset schema
-gains an optional `id_from_source` field (the asset's identifier in the source
-SCM system it was discovered from). No methods were added or removed.
+**Changed:** The `version` global argument now defaults to the Snyk REST API version `2026-09-09` (was `2024-10-15`). Models that set `version` explicitly keep their value.
 
-**Upgrade note:** Additive only — the new field is optional, so existing stored
-data continues to validate. No migration required.
+**Added:** `update_asset`, `list_repository_aliases_in_group`, `create_alias_in_group`, and `delete_aliases_in_group`; an optional `labels` list and `display_name` on asset classes.
 
-## 2026.11.03.1
+**Fixed:** `delete_aliases_in_group` required a `data` argument but never sent it. It now sends the argument as the request body.
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Changed:** Asset `tags` are key:value pairs in API `2026-09-09` (a list of strings before). The `tags` schema accepts both shapes, so assets stored under the earlier version still validate; the former string tags are now `labels` in the API. `class.name` is no longer declared on asset classes (the API now returns `display_name`); stored values are kept.
 
-## 2026.10.21.1
-
-**Changed:** The README now shows the Snyk API token stored in a swamp vault
-(`swamp vault put snyk API_TOKEN`) and wired with
-`--global-arg 'apiToken=${{ vault.get("snyk", "API_TOKEN") }}'`, replacing the
-literal-token example. The `apiToken` argument description says the same.
-
-Documentation only: nothing behavioral changed. This API returns no secrets.
+**Upgrade note:** The default API version change takes effect for models that rely on it. Pin `version` to `2024-10-15` to keep the old API behavior. Stored assets remain readable; their `tags` keep the earlier list shape until fetched again.

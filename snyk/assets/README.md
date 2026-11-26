@@ -26,12 +26,16 @@ swamp model create @webframp/snyk/assets snyk-assets \
 
 ## Methods
 
-| Method                | Description                                        |
-| --------------------- | -------------------------------------------------- |
-| `list_assets`         | List Assets with filters (Early Access)            |
-| `get_asset`           | Get an Asset by its ID (Early Access)              |
-| `list_related_assets` | List related assets with pagination (Early Access) |
-| `list_asset_projects` | List asset projects with pagination (Early Access) |
+| Method                             | Description                                                        |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| `list_repository_aliases_in_group` | List repository aliases in group (Early Access)                    |
+| `create_alias_in_group`            | Add alias for a repository asset in group (Early Access)           |
+| `delete_aliases_in_group`          | Bulk remove aliases from repository assets in group (Early Access) |
+| `list_assets`                      | List Assets with filters (Early Access)                            |
+| `get_asset`                        | Get an Asset by its ID (Early Access)                              |
+| `update_asset`                     | Update asset attributes (Early Access)                             |
+| `list_related_assets`              | List related assets with pagination (Early Access)                 |
+| `list_asset_projects`              | List asset projects with pagination (Early Access)                 |
 
 ## Development
 

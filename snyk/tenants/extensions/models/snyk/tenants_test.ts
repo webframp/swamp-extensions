@@ -365,7 +365,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -390,7 +390,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("name"), ["a b&c=d"]);
       assertEquals(req0.headers["authorization"], "token test-token");
@@ -436,7 +436,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -461,7 +461,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -500,7 +500,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -528,7 +528,7 @@ Deno.test({
       assertEquals(req0.method, "PATCH");
       assertEquals(req0.path, "/tenants/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -571,7 +571,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -599,7 +599,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/apps/installs");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("expand"), ["al pha,be&ta"]);
       assertEquals(req0.headers["authorization"], "token test-token");
@@ -643,7 +643,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -672,7 +672,7 @@ Deno.test({
       assertEquals(req0.method, "POST");
       assertEquals(req0.path, "/tenants/test-id-123/apps/installs");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -706,7 +706,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -734,7 +734,7 @@ Deno.test({
       assertEquals(req0.method, "DELETE");
       assertEquals(req0.path, "/tenants/test-id-123/apps/installs/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -770,7 +770,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -805,7 +805,7 @@ Deno.test({
         "/tenants/test-id-123/apps/installs/test-id-123/secrets",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -853,7 +853,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -884,7 +884,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/connections/test-id-123/integrations",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -924,7 +924,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -957,7 +957,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/connections/test-id-123/orgs/test-id-123/integration",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
@@ -987,7 +987,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1020,7 +1020,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/connections/test-id-123/orgs/test-id-123/integrations/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -1058,7 +1058,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1085,7 +1085,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/brokers/deployments");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -1131,7 +1131,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1163,7 +1163,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/connections/test-id-123/contexts",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -1209,7 +1209,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1241,7 +1241,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/contexts/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -1282,7 +1282,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1319,7 +1319,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/contexts/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -1354,7 +1354,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1386,7 +1386,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/contexts/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -1420,7 +1420,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1457,7 +1457,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/contexts/test-id-123/integration",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -1493,7 +1493,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1526,7 +1526,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/contexts/test-id-123/integrations/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -1563,7 +1563,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1594,7 +1594,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -1641,7 +1641,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1673,7 +1673,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
@@ -1713,7 +1713,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1746,7 +1746,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
@@ -1775,7 +1775,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1807,7 +1807,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -1846,7 +1846,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1878,7 +1878,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/connections",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -1928,7 +1928,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -1961,7 +1961,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/connections",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -1992,7 +1992,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2024,7 +2024,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/connections",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -2063,7 +2063,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2096,7 +2096,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/connections/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -2141,7 +2141,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2179,7 +2179,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/connections/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -2214,7 +2214,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2247,7 +2247,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/connections/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -2277,7 +2277,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2310,7 +2310,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/connections/test-id-123/bulk_migration",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -2351,7 +2351,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2385,7 +2385,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/connections/test-id-123/bulk_migration",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": { "type": "broker_migration" } });
@@ -2425,7 +2425,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2457,7 +2457,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/contexts",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -2503,7 +2503,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2536,7 +2536,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/contexts",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -2580,7 +2580,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2612,7 +2612,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/credentials",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -2660,7 +2660,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2693,7 +2693,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/credentials",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -2736,7 +2736,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2769,7 +2769,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/credentials/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -2812,7 +2812,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2846,7 +2846,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/credentials/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
@@ -2875,7 +2875,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2908,7 +2908,7 @@ Deno.test({
         "/tenants/test-id-123/brokers/installs/test-id-123/deployments/test-id-123/credentials/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -2939,7 +2939,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -2970,7 +2970,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/inventory/assets");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("filter"), ["a b&c=d"]);
       assertEquals(query.getAll("sort"), ["a b&c=d"]);
@@ -3009,7 +3009,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3037,7 +3037,7 @@ Deno.test({
       assertEquals(req0.method, "PATCH");
       assertEquals(req0.path, "/tenants/test-id-123/inventory/assets");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": [] });
@@ -3073,7 +3073,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3101,7 +3101,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/inventory/assets/filters");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("asset_types"), ["a b&c=d"]);
       assertEquals(req0.headers["authorization"], "token test-token");
@@ -3144,7 +3144,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3178,7 +3178,7 @@ Deno.test({
         "/tenants/test-id-123/inventory/assets/filters/test-id-123/values",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("q"), ["a b&c=d"]);
       assertEquals(query.getAll("keys_only"), ["true"]);
@@ -3227,7 +3227,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3255,7 +3255,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/inventory/assets/groups");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("asset_types"), ["a b&c=d"]);
       assertEquals(req0.headers["authorization"], "token test-token");
@@ -3298,7 +3298,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3334,7 +3334,7 @@ Deno.test({
         "/tenants/test-id-123/inventory/assets/groups/test-id-123/values",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("asset_types"), ["a b&c=d"]);
       assertEquals(query.getAll("filter"), ["a b&c=d"]);
@@ -3378,7 +3378,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3407,7 +3407,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/inventory/assets/id");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("type"), ["a b&c=d"]);
       assertEquals(query.getAll("key"), ["a b&c=d"]);
       assertEquals(req0.headers["authorization"], "token test-token");
@@ -3443,7 +3443,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3473,7 +3473,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/inventory/assets/lookup");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("type"), ["a b&c=d"]);
       assertEquals(query.getAll("key"), ["a b&c=d"]);
       assertEquals(query.getAll("fields"), ["a b&c=d"]);
@@ -3505,7 +3505,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3541,7 +3541,7 @@ Deno.test({
       assertEquals(req0.method, "POST");
       assertEquals(req0.path, "/tenants/test-id-123/inventory/assets/searches");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -3586,7 +3586,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3619,7 +3619,7 @@ Deno.test({
         "/tenants/test-id-123/inventory/assets/searches/test-id-123/results",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("sort"), ["a b&c=d"]);
       assertEquals(query.getAll("fields"), ["a b&c=d"]);
@@ -3662,7 +3662,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3694,7 +3694,7 @@ Deno.test({
         "/tenants/test-id-123/inventory/assets/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("fields"), ["a b&c=d"]);
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -3731,7 +3731,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3763,7 +3763,7 @@ Deno.test({
         "/tenants/test-id-123/inventory/assets/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
@@ -3819,7 +3819,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3853,7 +3853,7 @@ Deno.test({
         "/tenants/test-id-123/inventory/assets/test-id-123/relationships/projects",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("canonical"), ["with"]);
       assertEquals(query.getAll("target_id"), ["a b&c=d"]);
@@ -3902,7 +3902,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -3933,7 +3933,7 @@ Deno.test({
         "/tenants/test-id-123/inventory/assets/test-id-123/relationships/targets",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -3980,7 +3980,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4016,7 +4016,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/memberships");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("sort_by"), ["username"]);
       assertEquals(query.getAll("sort_order"), ["ASC"]);
@@ -4060,7 +4060,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4089,7 +4089,7 @@ Deno.test({
       assertEquals(req0.method, "PATCH");
       assertEquals(req0.path, "/tenants/test-id-123/memberships/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
@@ -4113,7 +4113,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4141,7 +4141,7 @@ Deno.test({
       assertEquals(req0.method, "DELETE");
       assertEquals(req0.path, "/tenants/test-id-123/memberships/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -4180,6 +4180,7 @@ Deno.test({
         "model_type": "llama",
         "model_variant": "llama-3-1-8b-instruct",
         "outputs": ["text"],
+        "overall_risk_score": 353,
         "parameters": "8B",
         "pipeline_tag": "text-generation",
         "provider": "meta",
@@ -4203,7 +4204,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4236,7 +4237,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/risk_db/models");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("provider"), ["al pha,be&ta"]);
       assertEquals(query.getAll("has_risk_assessment"), ["true"]);
@@ -4292,6 +4293,7 @@ Deno.test({
         "model_type": "llama",
         "model_variant": "llama-3-1-8b-instruct",
         "outputs": ["text"],
+        "overall_risk_score": 353,
         "parameters": "8B",
         "pipeline_tag": "text-generation",
         "provider": "meta",
@@ -4312,7 +4314,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4343,7 +4345,7 @@ Deno.test({
         "/tenants/test-id-123/risk_db/models/test-id-123",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -4387,7 +4389,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4418,7 +4420,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/roles");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("name"), ["a b&c=d"]);
       assertEquals(query.getAll("custom"), ["a b&c=d"]);
@@ -4468,7 +4470,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4496,7 +4498,7 @@ Deno.test({
       assertEquals(req0.method, "POST");
       assertEquals(req0.path, "/tenants/test-id-123/roles");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": { "attributes": null, "type": null } });
@@ -4536,7 +4538,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4565,7 +4567,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/tenants/test-id-123/roles/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("has_users_assigned"), ["true"]);
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -4607,7 +4609,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4637,7 +4639,7 @@ Deno.test({
       assertEquals(req0.method, "PATCH");
       assertEquals(req0.path, "/tenants/test-id-123/roles/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("force"), ["a b&c=d"]);
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
@@ -4668,7 +4670,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",
@@ -4696,7 +4698,7 @@ Deno.test({
       assertEquals(req0.method, "DELETE");
       assertEquals(req0.path, "/tenants/test-id-123/roles/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -4737,7 +4739,7 @@ Deno.test({
 
     try {
       const { context } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        globalArgs: { "apiToken": "test-token", "version": "2026-09-09" },
         definition: {
           id: "test-id",
           name: "test-tenants",

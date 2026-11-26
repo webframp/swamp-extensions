@@ -11,7 +11,7 @@
  * Snyk versions their API by date. Pin to a specific version for
  * reproducible builds.
  */
-export const API_VERSION = "2024-10-15";
+export const API_VERSION = "2026-09-09";
 
 /** Base URL for fetching the OpenAPI spec */
 export const SCHEMA_URL = `https://api.snyk.io/rest/openapi/${API_VERSION}`;
@@ -47,6 +47,11 @@ export interface ServiceConfig {
   labels: string[];
   /** Skip these specific paths even if they match prefixes */
   excludePaths?: string[];
+  /**
+   * Response fields whose shape changed between API versions. Each generated
+   * schema accepts the earlier shape as well, so stored resources still read.
+   */
+  legacyResponseShapes?: { field: string; current: string; legacy: string }[];
 }
 
 /**
@@ -180,6 +185,13 @@ export const SERVICES: ServiceConfig[] = [
     pathPrefixes: ["/groups/{group_id}/assets"],
     scope: "group",
     labels: ["snyk", "assets", "discovery", "inventory"],
+    // API 2026-09-09 made `tags` key:value pairs; earlier versions returned a
+    // list of strings (now `labels`).
+    legacyResponseShapes: [{
+      field: "tags",
+      current: "z.record(z.string(), z.string())",
+      legacy: "z.array(z.string())",
+    }],
   },
   {
     name: "sso",
