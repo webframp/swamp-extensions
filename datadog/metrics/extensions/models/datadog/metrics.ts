@@ -924,7 +924,7 @@ export const model = {
     create_historical_metrics_configuration: {
       description: "Enable historical metrics ingestion",
       arguments: z.object({
-        type: z.unknown(),
+        id: z.string().describe("The metric name, used as the resource ID."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -946,7 +946,9 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { attributes: attrs } };
+        const body = {
+          data: { type: "historical_metrics_configurations", ...attrs },
+        };
 
         const result = await ddApi(
           apiKey,

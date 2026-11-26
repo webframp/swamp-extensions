@@ -430,7 +430,31 @@ ${reqAsserts(false)}
       : method.operation.isJsonApi
       ? { data: { ...fixture, id: "new-123" } }
       : { ...fixture, id: "new-123" };
-    const createArgs = withName(method, testArgs);
+    // A resource-object body (`{data: {type, ...args}}`) is sent verbatim, so
+    // the args are the body's required string fields and no extra `name`.
+    const resourceObject = method.operation.requestBodyIsResourceObject;
+    const resourceFields: Record<string, unknown> = {};
+    for (
+      const name of method.operation.requestBody?.required ?? []
+    ) {
+      const prop = method.operation.requestBody?.properties?.[name];
+      if (resourceObject && prop?.type === "string") {
+        resourceFields[name] = `test-${name}`;
+      }
+    }
+    const createArgs = resourceObject
+      ? { ...testArgs, ...resourceFields }
+      : withName(method, testArgs);
+    const resourceAsserts = resourceObject
+      ? `\n      assertEquals(req0.body, { data: ${
+        JSON.stringify({
+          ...(method.operation.requestBodyType
+            ? { type: method.operation.requestBodyType }
+            : {}),
+          ...createArgs,
+        })
+      } });`
+      : "";
     // A batch response has no top-level id, so the instance is keyed on the
     // parent path param ("created" without one); the request body must keep
     // the envelope around the array.
@@ -461,7 +485,7 @@ ${reqAsserts(false)}
       const result = await ${execCall(method.name, JSON.stringify(createArgs))};
       assertEquals(result.dataHandles.length, 1);
 
-${reqAsserts(true)}${batchAsserts}
+${reqAsserts(true)}${batchAsserts}${resourceAsserts}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);

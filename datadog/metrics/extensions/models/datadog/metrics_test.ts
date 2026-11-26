@@ -569,9 +569,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_historical_metrics_configuration.execute({
-        "name": "test-resource",
-      }, context);
+      >).create_historical_metrics_configuration.execute(
+        { "id": "test-id" },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -585,6 +586,9 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: { "type": "historical_metrics_configurations", "id": "test-id" },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);

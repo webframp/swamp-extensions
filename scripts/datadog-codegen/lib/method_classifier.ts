@@ -693,7 +693,9 @@ export function generateArgsSchema(op: GroupedOperation): string {
   } else if (op.requestBody?.properties) {
     const required = new Set(op.requestBody.required ?? []);
     for (const [name, prop] of Object.entries(op.requestBody.properties)) {
-      if (name === "id" || name === "data") continue;
+      // `id` normally comes from the path; a resource-object body carries it.
+      if (name === "data") continue;
+      if (name === "id" && !op.requestBodyIsResourceObject) continue;
       const fieldName = sanitizeFieldName(name);
       if (seenFields.has(fieldName)) continue;
       seenFields.add(fieldName);
@@ -936,6 +938,7 @@ function generateCreateBody(
   );
   const excludeNames = [...pathParamNames, ...queryParamNames];
   const isJsonApi = method.operation.requestBodyIsJsonApi;
+  const resourceObject = method.operation.requestBodyIsResourceObject ?? false;
   const bodyType = method.operation.requestBodyType
     ? `"${method.operation.requestBodyType}"`
     : null;
@@ -1009,9 +1012,9 @@ ${indent}    const excludeKeys = new Set<string>(${
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
 ${indent}    }
-${indent}    const body = { data: { ${
-      bodyType ? `type: ${bodyType}, ` : ""
-    }attributes: attrs } };
+${indent}    const body = { data: { ${bodyType ? `type: ${bodyType}, ` : ""}${
+      resourceObject ? "...attrs" : "attributes: attrs"
+    } } };
 ${indent}
 ${indent}    const result = await ddApi(
 ${indent}      apiKey,
@@ -1073,6 +1076,7 @@ function generateUpdateBody(
   );
   const excludeNames = [...pathParamNames, ...queryParamNames];
   const isJsonApi = method.operation.requestBodyIsJsonApi;
+  const resourceObject = method.operation.requestBodyIsResourceObject ?? false;
   const bodyType = method.operation.requestBodyType
     ? `"${method.operation.requestBodyType}"`
     : null;
@@ -1101,9 +1105,9 @@ ${indent}    const excludeKeys = new Set<string>(${
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
 ${indent}    }
-${indent}    const body = { data: { ${
-      bodyType ? `type: ${bodyType}, ` : ""
-    }attributes: attrs } };
+${indent}    const body = { data: { ${bodyType ? `type: ${bodyType}, ` : ""}${
+      resourceObject ? "...attrs" : "attributes: attrs"
+    } } };
 ${indent}
 ${indent}    const result = await ddApi(
 ${indent}      apiKey,
@@ -1239,6 +1243,7 @@ function generateNoContentBody(
   );
   const excludeNames = [...pathParamNames, ...queryParamNames];
   const isJsonApi = method.operation.requestBodyIsJsonApi;
+  const resourceObject = method.operation.requestBodyIsResourceObject ?? false;
   const bodyType = method.operation.requestBodyType
     ? `"${method.operation.requestBodyType}"`
     : null;
@@ -1288,9 +1293,9 @@ ${indent}    const excludeKeys = new Set<string>(${
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
 ${indent}    }
-${indent}    const body = { data: { ${
-      bodyType ? `type: ${bodyType}, ` : ""
-    }attributes: attrs } };
+${indent}    const body = { data: { ${bodyType ? `type: ${bodyType}, ` : ""}${
+      resourceObject ? "...attrs" : "attributes: attrs"
+    } } };
 `;
     bodyArg = `\n${indent}      body,`;
   } else if (method.operation.requestBody !== undefined) {

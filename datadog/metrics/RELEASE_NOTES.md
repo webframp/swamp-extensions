@@ -1,7 +1,7 @@
 ## 2026.11.26.1
 
 **Added:** Historical metrics configuration methods:
-`create_historical_metrics_configuration`,
+`create_historical_metrics_configuration` (takes the metric name as `id`),
 `get_historical_metrics_configuration`, and
 `delete_historical_metrics_configuration`, regenerated from the current Datadog
 v2 OpenAPI spec.

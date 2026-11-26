@@ -488,10 +488,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).add_team_hierarchy_link.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).add_team_hierarchy_link.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -502,6 +499,7 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, { data: { "type": "team_hierarchy_links" } });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
