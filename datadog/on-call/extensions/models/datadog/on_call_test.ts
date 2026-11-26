@@ -341,7 +341,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_on_call_escalation_policy.execute(
-        { "name": "test-resource" },
+        { "name": "test-name" },
         context,
       );
       assertEquals(result.dataHandles.length, 1);
@@ -354,6 +354,9 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: { "type": "policies", "attributes": { "name": "test-name" } },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
@@ -792,7 +795,7 @@ Deno.test({
         }
       >).create_on_call_page_comment.execute({
         "page_id": "test-id-123",
-        "name": "test-resource",
+        "body": "test-body",
       }, context);
       assertEquals(result.dataHandles.length, 0);
 
@@ -804,6 +807,9 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: { "type": "comments", "attributes": { "body": "test-body" } },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 0);
@@ -937,10 +943,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_on_call_schedule.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).create_on_call_schedule.execute({
+        "name": "test-name",
+        "time_zone": "test-time_zone",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -951,6 +957,12 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: {
+          "type": "schedules",
+          "attributes": { "name": "test-name", "time_zone": "test-time_zone" },
+        },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);

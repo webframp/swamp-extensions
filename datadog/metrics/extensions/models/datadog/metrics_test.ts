@@ -866,10 +866,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_tag_indexing_rule.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).create_tag_indexing_rule.execute({ "name": "test-name" }, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -880,6 +877,12 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: {
+          "type": "tag_indexing_rules",
+          "attributes": { "name": "test-name" },
+        },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
