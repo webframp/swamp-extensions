@@ -41,13 +41,13 @@ swamp model create @webframp/snyk/groups snyk-groups \
 | `update_group_policy`             | Update a group-level policy (Early Access)                        |
 | `delete_group_policy`             | Delete an group-level policy (Early Access)                       |
 | `list_assignments`                | List all assignments for a group                                  |
-| `create_assignments`              | Create bulk assignments for rule extensions                       |
-| `delete_assignments`              | Delete assignments for rule extensions                            |
-| `list_secrets_rule_extensions`    | Get a list of all secrets rule extensions for the requested Group |
-| `create_secrets_rule_extension`   | Create a secrets rule extension                                   |
-| `get_secrets_rule_extension`      | Get a secrets rule extension by rule extension ID                 |
-| `update_secrets_rule_extension`   | Update a secrets rule extension by rule extension ID              |
-| `delete_secrets_rule_extension`   | Delete a secrets rule extension by rule extension ID              |
+| `create_assignments`              | Create bulk assignments for Rule Extensions                       |
+| `delete_assignments`              | Delete assignments for Rule Extensions                            |
+| `list_secrets_rule_extensions`    | Get a list of all Secrets Rule Extensions for the requested Group |
+| `create_secrets_rule_extension`   | Create a Secrets Rule Extension                                   |
+| `get_secrets_rule_extension`      | Get a Secrets Rule Extension by Rule Extension ID                 |
+| `update_secrets_rule_extension`   | Update a Secrets Rule Extension by Rule Extension ID              |
+| `delete_secrets_rule_extension`   | Delete a Secrets Rule Extension by Rule Extension ID              |
 | `update_user`                     | Update a user's role in a group (Early Access)                    |
 
 ## Development

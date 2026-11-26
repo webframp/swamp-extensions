@@ -27,7 +27,32 @@ const GlobalArgsSchema = z.object({
     'Snyk API token. Store it in a vault and wire it with ${{ vault.get("snyk", "API_TOKEN") }}; never pass the literal token.',
   ),
   groupId: z.string().describe("Snyk group ID"),
-  version: z.string().default("2024-10-15").describe("Snyk API version date"),
+  version: z.string().default("2026-09-09").describe("Snyk API version date"),
+});
+
+const RepositoryAliasesInGroupItemSchema = z.object({
+  id: z.string().nullish().describe(
+    "The _id of the canonical reference document in the asset-reference collection",
+  ),
+  type: z.string().nullish(),
+  new_url: z.string().nullish().describe(
+    "The alias URL on the canonical document",
+  ),
+  url: z.string().nullish().describe(
+    "The primary URL of the canonical document",
+  ),
+}).passthrough();
+
+const ListRepositoryAliasesInGroupSchema = z.object({
+  items: z.array(RepositoryAliasesInGroupItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListAssetsSchema = z.object({
@@ -46,10 +71,12 @@ const ListAssetsSchema = z.object({
     "URL to browse the asset",
   ),
   class: z.object({
+    display_name: z.string().nullish(),
     locked: z.boolean().nullish(),
-    name: z.string().nullish(),
     rank: z.number().nullish(),
-  }).passthrough().nullish(),
+  }).passthrough().nullish().describe(
+    "Mandated, hierarchical attribute that provides a standardized measure of an asset's importance to...",
+  ),
   coverage_controls: z.array(z.unknown()).nullish(),
   created_at: z.string().nullish().describe("Creation timestamp"),
   default_branch_name: z.string().nullable().nullish().describe(
@@ -77,12 +104,21 @@ const ListAssetsSchema = z.object({
   image_tags: z.array(z.string()).nullable().nullish().describe(
     "List of tags for the container image",
   ),
+  labels: z.array(z.string()).nullish().describe(
+    "Unstructured, simple text strings that can be applied to an asset",
+  ),
   languages: z.record(z.string(), z.number()).nullable().nullish().describe(
     "Languages used in the asset with usage counts",
   ),
   name: z.string().nullable().nullish().describe(
     "Name of the asset of the file path",
   ),
+  removed_reasons: z.array(
+    z.object({
+      reason: z.string().nullish(),
+      removed_at: z.string().nullish(),
+    }).passthrough(),
+  ).nullish().describe("List of reasons for removal"),
   repository_freshness: z.string().nullable().nullish().describe(
     "Indicating the activity level of the repository",
   ),
@@ -95,8 +131,8 @@ const ListAssetsSchema = z.object({
   sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.array(z.string()).nullish().describe(
-    "Tags associated with the asset",
+  tags: z.record(z.string(), z.string()).nullish().describe(
+    "Explicitly defined, key:value pairs that are associated with an asset",
   ),
   updated_at: z.string().nullish().describe("Last update timestamp"),
   assets_id: z.string().nullish().describe("Related assets ID"),
@@ -120,10 +156,12 @@ const GetAssetSchema = z.object({
     "URL to browse the asset",
   ),
   class: z.object({
+    display_name: z.string().nullish(),
     locked: z.boolean().nullish(),
-    name: z.string().nullish(),
     rank: z.number().nullish(),
-  }).passthrough().nullish(),
+  }).passthrough().nullish().describe(
+    "Mandated, hierarchical attribute that provides a standardized measure of an asset's importance to...",
+  ),
   coverage_controls: z.array(z.unknown()).nullish(),
   created_at: z.string().nullish().describe("Creation timestamp"),
   default_branch_name: z.string().nullable().nullish().describe(
@@ -151,12 +189,21 @@ const GetAssetSchema = z.object({
   image_tags: z.array(z.string()).nullable().nullish().describe(
     "List of tags for the container image",
   ),
+  labels: z.array(z.string()).nullish().describe(
+    "Unstructured, simple text strings that can be applied to an asset",
+  ),
   languages: z.record(z.string(), z.number()).nullable().nullish().describe(
     "Languages used in the asset with usage counts",
   ),
   name: z.string().nullable().nullish().describe(
     "Name of the asset of the file path",
   ),
+  removed_reasons: z.array(
+    z.object({
+      reason: z.string().nullish(),
+      removed_at: z.string().nullish(),
+    }).passthrough(),
+  ).nullish().describe("List of reasons for removal"),
   repository_freshness: z.string().nullable().nullish().describe(
     "Indicating the activity level of the repository",
   ),
@@ -169,8 +216,8 @@ const GetAssetSchema = z.object({
   sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.array(z.string()).nullish().describe(
-    "Tags associated with the asset",
+  tags: z.record(z.string(), z.string()).nullish().describe(
+    "Explicitly defined, key:value pairs that are associated with an asset",
   ),
   updated_at: z.string().nullish().describe("Last update timestamp"),
   assets_id: z.string().nullish().describe("Related assets ID"),
@@ -194,10 +241,12 @@ const RelatedAssetsItemSchema = z.object({
     "URL to browse the asset",
   ),
   class: z.object({
+    display_name: z.string().nullish(),
     locked: z.boolean().nullish(),
-    name: z.string().nullish(),
     rank: z.number().nullish(),
-  }).passthrough().nullish(),
+  }).passthrough().nullish().describe(
+    "Mandated, hierarchical attribute that provides a standardized measure of an asset's importance to...",
+  ),
   coverage_controls: z.array(z.unknown()).nullish(),
   created_at: z.string().nullish().describe("Creation timestamp"),
   default_branch_name: z.string().nullable().nullish().describe(
@@ -225,12 +274,21 @@ const RelatedAssetsItemSchema = z.object({
   image_tags: z.array(z.string()).nullable().nullish().describe(
     "List of tags for the container image",
   ),
+  labels: z.array(z.string()).nullish().describe(
+    "Unstructured, simple text strings that can be applied to an asset",
+  ),
   languages: z.record(z.string(), z.number()).nullable().nullish().describe(
     "Languages used in the asset with usage counts",
   ),
   name: z.string().nullable().nullish().describe(
     "Name of the asset of the file path",
   ),
+  removed_reasons: z.array(
+    z.object({
+      reason: z.string().nullish(),
+      removed_at: z.string().nullish(),
+    }).passthrough(),
+  ).nullish().describe("List of reasons for removal"),
   repository_freshness: z.string().nullable().nullish().describe(
     "Indicating the activity level of the repository",
   ),
@@ -243,8 +301,8 @@ const RelatedAssetsItemSchema = z.object({
   sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.array(z.string()).nullish().describe(
-    "Tags associated with the asset",
+  tags: z.record(z.string(), z.string()).nullish().describe(
+    "Explicitly defined, key:value pairs that are associated with an asset",
   ),
   updated_at: z.string().nullish().describe("Last update timestamp"),
   assets_id: z.string().nullish().describe("Related assets ID"),
@@ -304,7 +362,7 @@ const ListAssetProjectsSchema = z.object({
 /** Snyk Assets — asset discovery and classification across the group */
 export const model = {
   type: "@webframp/snyk/assets",
-  version: "2026.11.05.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -394,9 +452,27 @@ export const model = {
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
+    "repository_aliases_in_group": {
+      description: "List repository aliases in group (Early Access)",
+      schema: ListRepositoryAliasesInGroupSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "alias_in_group": {
+      description: "Add alias for a repository asset in group (Early Access)",
+      schema: z.object({}).passthrough(),
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "list_assets": {
       description: "List Assets with filters (Early Access)",
       schema: ListAssetsSchema,
@@ -424,6 +500,141 @@ export const model = {
   },
 
   methods: {
+    list_repository_aliases_in_group: {
+      description: "List repository aliases in group (Early Access)",
+      arguments: z.object({
+        url: z.string().optional().describe(
+          "Optional repository URL filter — restricts results to the canonical document...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
+        const query = queryEntries(args, { url: { name: "url" } });
+
+        const { results, truncated } = await snykApiPaginated(
+          apiToken,
+          `/groups/${encodeURIComponent(groupId)}/assets/repository/aliases`,
+          version,
+          query,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "repository_aliases_in_group",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} repository_aliases_in_group", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_alias_in_group: {
+      description: "Add alias for a repository asset in group (Early Access)",
+      arguments: z.object({
+        data: z.array(z.unknown()),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, groupId, version } = context.globalArgs;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await snykApi(
+          apiToken,
+          "POST",
+          `/groups/${encodeURIComponent(groupId)}/assets/repository/aliases`,
+          version,
+          body,
+        );
+
+        const id = sanitizeInstanceName(
+          String((result as { id?: unknown }).id ?? "created"),
+        );
+        const handle = await context.writeResource(
+          "alias_in_group",
+          id,
+          result,
+        );
+        context.logger.info("Created alias_in_group {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_aliases_in_group: {
+      description:
+        "Bulk remove aliases from repository assets in group (Early Access)",
+      arguments: z.object({
+        data: z.array(z.unknown()),
+      }),
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, groupId, version } = context.globalArgs;
+        await snykApi(
+          apiToken,
+          "DELETE",
+          `/groups/${encodeURIComponent(groupId)}/assets/repository/aliases`,
+          version,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: "unknown" });
+        return { dataHandles: [] };
+      },
+    },
     list_assets: {
       description: "List Assets with filters (Early Access)",
       arguments: z.object({}),
@@ -501,6 +712,52 @@ export const model = {
           result,
         );
         context.logger.info("Fetched asset", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_asset: {
+      description: "Update asset attributes (Early Access)",
+      arguments: z.object({
+        asset_id: z.string().describe("Unique identifier for the Asset"),
+        data: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, groupId, version } = context.globalArgs;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>(["asset_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await snykApi(
+          apiToken,
+          "PATCH",
+          `/groups/${encodeURIComponent(groupId)}/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }`,
+          version,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "asset",
+          sanitizeInstanceName(String(args.asset_id)),
+          result,
+        );
+        context.logger.info("Updated asset", {});
         return { dataHandles: [handle] };
       },
     },

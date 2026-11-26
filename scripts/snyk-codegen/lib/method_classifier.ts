@@ -21,7 +21,7 @@ import {
   truncateAtBoundary,
 } from "./type_mapper.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
-import { ZOD_VERSION } from "../config.ts";
+import { API_VERSION, ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
 export type MethodType =
@@ -357,7 +357,7 @@ function generateGlobalArgsSchema(config: ServiceConfig): string {
   }
 
   lines.push(
-    `  version: z.string().default("2024-10-15").describe("Snyk API version date"),`,
+    `  version: z.string().default("${API_VERSION}").describe("Snyk API version date"),`,
   );
   lines.push(`});`);
   return lines.join("\n");

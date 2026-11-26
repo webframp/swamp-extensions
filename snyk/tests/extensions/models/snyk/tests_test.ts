@@ -174,7 +174,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-tests", version: 1, tags: {} },
@@ -196,7 +196,7 @@ Deno.test({
       assertEquals(req0.method, "POST");
       assertEquals(req0.path, "/orgs/test-org-123/tests");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
@@ -221,67 +221,27 @@ Deno.test({
       "id": "fixture-123",
       "type": "resource",
       "attributes": {
-        "components": [],
-        "config": {
-          "asset_name": "test-value",
-          "local_policy": null,
-          "monitor": true,
-          "project_business_criticality": "test-value",
-          "project_environment": [],
-          "project_lifecycle": [],
-          "project_tags": [],
-          "publish_report": true,
-          "scan_config": null,
-          "target_name": "test-value",
-          "target_reference": "test-value",
-          "timeout": null,
-        },
         "created_at": "2024-01-01T00:00:00Z",
-        "effective_summary": {
-          "count": 30,
-          "count_by": {
-            "result_type": { "sast": 12, "sca": 18 },
-            "severity": { "critical": 2, "high": 3, "low": 15, "medium": 10 },
-          },
+        "inputs": {
+          "config": null,
+          "origin": null,
+          "resources": [{
+            "context": {
+              "branch": "main",
+              "commit_ref": "8dbd1ea7201a0d49603467981075a633d91e40b9",
+              "repo_url": "https://github.com/example/repo",
+            },
+            "integration_id": "00000000-0000-0000-0000-000000000000",
+            "type": "scm",
+          }],
         },
-        "outcome": {
-          "breached_policies": null,
-          "reason": null,
-          "result": null,
+        "outputs": {
+          "components": [],
+          "facts": [],
+          "outcome": null,
+          "summary": null,
         },
-        "raw_summary": {
-          "count": 30,
-          "count_by": {
-            "result_type": { "sast": 12, "sca": 18 },
-            "severity": { "critical": 2, "high": 3, "low": 15, "medium": 10 },
-          },
-        },
-        "resources": [{
-          "resource": {
-            "content_type": "source",
-            "file_patterns": ["*.go"],
-            "repository_url": "https://example.com/source/repo",
-            "revision_id": "abcde12345",
-            "type": "upload",
-          },
-          "type": "base",
-        }, {
-          "resource": {
-            "ref_id": "6BD4F5E2-D4E8-4C6B-BB0E-ECF0A70423F5",
-            "reference_type": "target",
-            "type": "snyk_ref",
-          },
-          "type": "base",
-        }],
-        "sdlc_stage": {},
         "state": { "errors": [], "execution": null, "warnings": [] },
-        "subject": {},
-        "subject_locators": [{
-          "paths": ["package.json"],
-          "type": "local_path",
-        }],
-        "test_facts": [],
-        "user_public_id": "test-value",
       },
     };
     const { url, server, requests } = startMockSnykServer({
@@ -293,7 +253,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-tests", version: 1, tags: {} },
@@ -315,7 +275,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/orgs/test-org-123/tests/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -399,7 +359,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-tests", version: 1, tags: {} },
@@ -427,7 +387,7 @@ Deno.test({
         "/orgs/test-org-123/tests/test-id-123/components/test-id-123/findings",
       );
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -518,7 +478,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-tests", version: 1, tags: {} },
@@ -540,7 +500,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/orgs/test-org-123/tests/test-id-123/findings");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -594,7 +554,7 @@ Deno.test({
       const { context } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: { id: "test-id", name: "test-tests", version: 1, tags: {} },

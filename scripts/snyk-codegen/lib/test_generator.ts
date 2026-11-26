@@ -18,6 +18,7 @@ import {
 } from "./method_classifier.ts";
 import { isSensitiveFieldName } from "./type_mapper.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
+import { API_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
 /** Generate a complete test file for a service */
@@ -479,7 +480,7 @@ function generateExecutionTest(
       assertEquals(req0.method, "${httpMethod}");
       assertEquals(req0.path, ${JSON.stringify(routePath)});
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");${
+      assertEquals(query.get("version"), "${API_VERSION}");${
     method.type === "list"
       ? `\n      assertEquals(query.get("limit"), "100");`
       : ""
@@ -677,7 +678,7 @@ function snykGlobalArgs(config: ServiceConfig): Record<string, string> {
     : undefined;
   const g: Record<string, string> = {
     apiToken: "test-token",
-    version: "2024-10-15",
+    version: API_VERSION,
   };
   if (scopeId) g[scopeId] = "test-org-123";
   return g;

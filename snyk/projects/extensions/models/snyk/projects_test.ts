@@ -174,6 +174,7 @@ Deno.test({
         "lifecycle": ["production"],
         "name": "snyk/goof",
         "origin": "github",
+        "profile_name": "production-aws",
         "read_only": true,
         "settings": {
           "auto_dependency_upgrade": null,
@@ -206,7 +207,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -254,7 +255,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/orgs/test-org-123/projects");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("target_id"), ["al pha", "be&ta"]);
       assertEquals(query.getAll("target_reference"), ["a b&c=d"]);
@@ -318,7 +319,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -348,7 +349,7 @@ Deno.test({
       assertEquals(req0.method, "POST");
       assertEquals(req0.path, "/orgs/test-org-123/projects/bulk-delete");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
@@ -383,6 +384,7 @@ Deno.test({
         "lifecycle": ["production"],
         "name": "snyk/goof",
         "origin": "github",
+        "profile_name": "production-aws",
         "read_only": true,
         "settings": {
           "auto_dependency_upgrade": null,
@@ -412,7 +414,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -444,7 +446,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/orgs/test-org-123/projects/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("expand"), ["al pha,be&ta"]);
       assertEquals(query.getAll("meta.latest_issue_counts"), ["true"]);
       assertEquals(query.getAll("meta.latest_dependency_total"), ["true"]);
@@ -480,6 +482,7 @@ Deno.test({
         "lifecycle": ["production"],
         "name": "snyk/goof",
         "origin": "github",
+        "profile_name": "production-aws",
         "read_only": true,
         "settings": {
           "auto_dependency_upgrade": null,
@@ -509,7 +512,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -553,7 +556,7 @@ Deno.test({
       assertEquals(req0.method, "PATCH");
       assertEquals(req0.path, "/orgs/test-org-123/projects/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("expand"), ["al pha,be&ta"]);
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
@@ -599,7 +602,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -626,7 +629,7 @@ Deno.test({
       assertEquals(req0.method, "DELETE");
       assertEquals(req0.path, "/orgs/test-org-123/projects/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
 
@@ -656,7 +659,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -688,7 +691,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/orgs/test-org-123/projects/test-id-123/sbom");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("format"), ["cyclonedx1.6+json"]);
       assertEquals(query.getAll("exclude"), ["al pha", "be&ta"]);
       assertEquals(query.getAll("go_module_level"), ["true"]);
@@ -740,7 +743,7 @@ Deno.test({
       const { context } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {

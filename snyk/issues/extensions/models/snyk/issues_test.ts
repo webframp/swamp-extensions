@@ -177,6 +177,7 @@ Deno.test({
           "24018479-6bb1-4196-a41b-e54c7c5dcc82:1c6ddc45.7f41fd64.a214ef38.72ad650e.f0ecbaa5.18c3080a.b570850e.89112ac5.1a6d2cd5.71413d6f.a924ef28.71cdd50e.d0e1bea5.52c3a80a.1a0c4319.a9127ac5:1",
         "key_asset": "1662bb2e-4c43-4f2c-83e1-ee5e0e009999",
         "problems": [],
+        "project_status": "active",
         "resolution": {
           "details": "test-value",
           "resolved_at": "2024-01-01T00:00:00Z",
@@ -191,6 +192,7 @@ Deno.test({
           "score": { "model": "v4", "value": 700 },
         },
         "severities": [],
+        "source_type": "github",
         "status": "open",
         "title": "Insecure hash function used",
         "tool": "snyk://npm-deps",
@@ -213,7 +215,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -241,6 +243,8 @@ Deno.test({
         "updated_after": "a b&c=d",
         "created_before": "a b&c=d",
         "created_after": "a b&c=d",
+        "source_types": ["al pha", "be&ta"],
+        "project_status": "a b&c=d",
         "effective_severity_level": ["al pha", "be&ta"],
         "status": ["al pha", "be&ta"],
         "ignored": true,
@@ -253,7 +257,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/groups/test-id-123/issues");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("scan_item.id"), ["a b&c=d"]);
       assertEquals(query.getAll("scan_item.type"), ["a b&c=d"]);
@@ -262,6 +266,8 @@ Deno.test({
       assertEquals(query.getAll("updated_after"), ["a b&c=d"]);
       assertEquals(query.getAll("created_before"), ["a b&c=d"]);
       assertEquals(query.getAll("created_after"), ["a b&c=d"]);
+      assertEquals(query.getAll("source_types"), ["al pha,be&ta"]);
+      assertEquals(query.getAll("project_status"), ["a b&c=d"]);
       assertEquals(query.getAll("effective_severity_level"), ["al pha,be&ta"]);
       assertEquals(query.getAll("status"), ["al pha,be&ta"]);
       assertEquals(query.getAll("ignored"), ["true"]);
@@ -307,6 +313,7 @@ Deno.test({
           "24018479-6bb1-4196-a41b-e54c7c5dcc82:1c6ddc45.7f41fd64.a214ef38.72ad650e.f0ecbaa5.18c3080a.b570850e.89112ac5.1a6d2cd5.71413d6f.a924ef28.71cdd50e.d0e1bea5.52c3a80a.1a0c4319.a9127ac5:1",
         "key_asset": "1662bb2e-4c43-4f2c-83e1-ee5e0e009999",
         "problems": [],
+        "project_status": "active",
         "resolution": {
           "details": "test-value",
           "resolved_at": "2024-01-01T00:00:00Z",
@@ -321,6 +328,7 @@ Deno.test({
           "score": { "model": "v4", "value": 700 },
         },
         "severities": [],
+        "source_type": "github",
         "status": "open",
         "title": "Insecure hash function used",
         "tool": "snyk://npm-deps",
@@ -340,7 +348,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -371,7 +379,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/groups/test-id-123/issues/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("include_code_flows"), ["true"]);
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -410,6 +418,7 @@ Deno.test({
           "24018479-6bb1-4196-a41b-e54c7c5dcc82:1c6ddc45.7f41fd64.a214ef38.72ad650e.f0ecbaa5.18c3080a.b570850e.89112ac5.1a6d2cd5.71413d6f.a924ef28.71cdd50e.d0e1bea5.52c3a80a.1a0c4319.a9127ac5:1",
         "key_asset": "1662bb2e-4c43-4f2c-83e1-ee5e0e009999",
         "problems": [],
+        "project_status": "active",
         "resolution": {
           "details": "test-value",
           "resolved_at": "2024-01-01T00:00:00Z",
@@ -424,6 +433,7 @@ Deno.test({
           "score": { "model": "v4", "value": 700 },
         },
         "severities": [],
+        "source_type": "github",
         "status": "open",
         "title": "Insecure hash function used",
         "tool": "snyk://npm-deps",
@@ -443,7 +453,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -470,6 +480,8 @@ Deno.test({
         "updated_after": "a b&c=d",
         "created_before": "a b&c=d",
         "created_after": "a b&c=d",
+        "source_types": ["al pha", "be&ta"],
+        "project_status": "a b&c=d",
         "effective_severity_level": ["al pha", "be&ta"],
         "status": ["al pha", "be&ta"],
         "ignored": true,
@@ -482,7 +494,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/orgs/test-org-123/issues");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.get("limit"), "100");
       assertEquals(query.getAll("scan_item.id"), ["a b&c=d"]);
       assertEquals(query.getAll("scan_item.type"), ["a b&c=d"]);
@@ -491,6 +503,8 @@ Deno.test({
       assertEquals(query.getAll("updated_after"), ["a b&c=d"]);
       assertEquals(query.getAll("created_before"), ["a b&c=d"]);
       assertEquals(query.getAll("created_after"), ["a b&c=d"]);
+      assertEquals(query.getAll("source_types"), ["al pha,be&ta"]);
+      assertEquals(query.getAll("project_status"), ["a b&c=d"]);
       assertEquals(query.getAll("effective_severity_level"), ["al pha,be&ta"]);
       assertEquals(query.getAll("status"), ["al pha,be&ta"]);
       assertEquals(query.getAll("ignored"), ["true"]);
@@ -536,6 +550,7 @@ Deno.test({
           "24018479-6bb1-4196-a41b-e54c7c5dcc82:1c6ddc45.7f41fd64.a214ef38.72ad650e.f0ecbaa5.18c3080a.b570850e.89112ac5.1a6d2cd5.71413d6f.a924ef28.71cdd50e.d0e1bea5.52c3a80a.1a0c4319.a9127ac5:1",
         "key_asset": "1662bb2e-4c43-4f2c-83e1-ee5e0e009999",
         "problems": [],
+        "project_status": "active",
         "resolution": {
           "details": "test-value",
           "resolved_at": "2024-01-01T00:00:00Z",
@@ -550,6 +565,7 @@ Deno.test({
           "score": { "model": "v4", "value": 700 },
         },
         "severities": [],
+        "source_type": "github",
         "status": "open",
         "title": "Insecure hash function used",
         "tool": "snyk://npm-deps",
@@ -569,7 +585,7 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {
@@ -599,7 +615,7 @@ Deno.test({
       assertEquals(req0.method, "GET");
       assertEquals(req0.path, "/orgs/test-org-123/issues/test-id-123");
       const query = new URLSearchParams(req0.search);
-      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("version"), "2026-09-09");
       assertEquals(query.getAll("include_code_flows"), ["true"]);
       assertEquals(req0.headers["authorization"], "token test-token");
       assertEquals(req0.body, null);
@@ -649,7 +665,7 @@ Deno.test({
       const { context } = createModelTestContext({
         globalArgs: {
           "apiToken": "test-token",
-          "version": "2024-10-15",
+          "version": "2026-09-09",
           "orgId": "test-org-123",
         },
         definition: {

@@ -28,14 +28,14 @@ swamp model create @webframp/snyk/sast snyk-sast \
 
 | Method                               | Description                                                        |
 | ------------------------------------ | ------------------------------------------------------------------ |
-| `list_sast_rule_extensions_by_group` | Get a list of all the SAST rule extensions for the requested Group |
-| `create_sast_rule_extension`         | Create a SAST rule extension                                       |
-| `create_sast_impact_test`            | Trigger a SAST rule extension impact test.                         |
-| `get_sast_impact_test_status`        | Retrieve the SAST rule extension impact test status.               |
-| `get_sast_impact_test_result`        | Retrieve the impact test result for a SAST rule extension.         |
-| `get_sast_rule_extension`            | Get a SAST rule extension by SAST rule extension ID                |
-| `update_sast_rule_extension`         | Update a SAST rule extension by SAST rule extension ID             |
-| `delete_sast_rule_extension`         | Delete a SAST rule extension by SAST rule extension ID             |
+| `list_sast_rule_extensions_by_group` | Get a list of all the SAST Rule Extensions for the requested Group |
+| `create_sast_rule_extension`         | Create a SAST Rule Extension                                       |
+| `create_sast_impact_test`            | Trigger a SAST Rule Extension impact test.                         |
+| `get_sast_impact_test_status`        | Retrieve the SAST Rule Extension impact test status.               |
+| `get_sast_impact_test_result`        | Retrieve the impact test result for a SAST Rule Extension.         |
+| `get_sast_rule_extension`            | Get a SAST Rule Extension by SAST Rule Extension ID                |
+| `update_sast_rule_extension`         | Update a SAST Rule Extension by SAST Rule Extension ID             |
+| `delete_sast_rule_extension`         | Delete a SAST Rule Extension by SAST Rule Extension ID             |
 
 ## Development
 

@@ -1,12 +1,7 @@
-## 2026.11.03.1
+## 2026.11.26.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Changed:** The `version` global argument now defaults to the Snyk REST API version `2026-09-09` (was `2024-10-15`). Models that set `version` explicitly keep their value.
 
-## 2026.10.21.1
+**Changed:** The group rule extensions method description now capitalizes "Rule Extensions".
 
-**Changed:** The README now shows the Snyk API token stored in a swamp vault
-(`swamp vault put snyk API_TOKEN`) and wired with
-`--global-arg 'apiToken=${{ vault.get("snyk", "API_TOKEN") }}'`, replacing the
-literal-token example. The `apiToken` argument description says the same.
-
-Documentation only: nothing behavioral changed. This API returns no secrets.
+**Upgrade note:** The default API version change takes effect for models that rely on it. Pin `version` to `2024-10-15` to keep the old API behavior. Stored data is unchanged.

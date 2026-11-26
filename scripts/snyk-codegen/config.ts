@@ -11,7 +11,7 @@
  * Snyk versions their API by date. Pin to a specific version for
  * reproducible builds.
  */
-export const API_VERSION = "2024-10-15";
+export const API_VERSION = "2026-09-09";
 
 /** Base URL for fetching the OpenAPI spec */
 export const SCHEMA_URL = `https://api.snyk.io/rest/openapi/${API_VERSION}`;
