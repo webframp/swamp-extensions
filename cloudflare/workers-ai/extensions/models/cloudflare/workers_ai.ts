@@ -14,6 +14,7 @@ import {
   cfApiPaginatedCursor,
   sanitizeInstanceName,
   shortHash,
+  stripSensitive,
 } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/workers-ai";
@@ -30,20 +31,30 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetCreditBalanceSchema = z.object({
-  balance: z.number().optional(),
-  first_topup_success: z.boolean().optional(),
-  has_default_payment_method: z.boolean().optional(),
+  balance: z.number().optional().describe(
+    "Credit balance in US cents. Can be fractional, because usage is deducted in fractions of a cent, ...",
+  ),
+  first_topup_success: z.boolean().optional().describe(
+    "Whether the account completed its first top-up. Auto top-up can be set up only after it.",
+  ),
+  has_default_payment_method: z.boolean().optional().describe(
+    "Whether AI Gateway billing has a default payment method for the account.",
+  ),
   payment_method: z.object({
     brand: z.string().optional(),
     last4: z.string().optional(),
-  }).nullable().optional(),
+  }).nullable().optional().describe(
+    "The default payment method's card. Null when there is no default, it isn't a card, or it couldn't...",
+  ),
   topup_config: z.object({
     amount: z.number().nullable().optional(),
     disabledReason: z.string().nullable().optional(),
     error: z.string().nullable().optional(),
     lastFailedAt: z.number().nullable().optional(),
     threshold: z.number().nullable().optional(),
-  }).optional(),
+  }).optional().describe(
+    "Auto top-up configuration, as GET /topup/config returns it.",
+  ),
 }).passthrough();
 
 const GetInvoiceHistorySchema = z.object({
@@ -62,21 +73,25 @@ const GetInvoiceHistorySchema = z.object({
     invoice_origin: z.string().optional(),
     invoice_pdf: z.string().nullable().optional(),
     status: z.string().nullable().optional(),
-  })).optional(),
+  })).optional().describe("Top-up invoices matching `type`, up to 100."),
   pagination: z.object({
     has_more: z.boolean().optional(),
     page: z.number().optional(),
     per_page: z.number().optional(),
     total_count: z.number().optional(),
-  }).optional(),
+  }).optional().describe("Pagination details. Results come in a single page."),
 }).passthrough();
 
 const GetInvoicePreviewSchema = z.object({
-  amount_due: z.number().optional(),
-  amount_paid: z.number().optional(),
-  amount_remaining: z.number().optional(),
-  currency: z.string().optional(),
-  id: z.string().optional(),
+  amount_due: z.number().optional().describe("Amount due, in US cents."),
+  amount_paid: z.number().optional().describe("Amount paid, in US cents."),
+  amount_remaining: z.number().optional().describe(
+    "Amount still owed, in US cents.",
+  ),
+  currency: z.string().optional().describe("Lowercase ISO 4217 currency code."),
+  id: z.string().optional().describe(
+    "Invoice number, as printed on the invoice, rather than an identifier. Empty until the invoice is ...",
+  ),
   invoice_lines: z.array(z.object({
     amount: z.number().optional(),
     currency: z.string().optional(),
@@ -95,57 +110,136 @@ const GetInvoicePreviewSchema = z.object({
       unit_amount_decimal: z.string().nullable().optional(),
     }).optional(),
     quantity: z.number().optional(),
-  })).optional(),
-  period_end: z.number().optional(),
-  period_start: z.number().optional(),
-  status: z.enum(["draft", "open", "paid", "uncollectible", "void"]).optional(),
-}).passthrough();
-
-const GetSpendingLimitSchema = z.object({
-  config: z.object({
-    amount: z.number().nullable().optional(),
-    duration: z.string().nullable().optional(),
-    strategy: z.string().nullable().optional(),
-  }).optional(),
-  enabled: z.boolean().optional(),
+  })).optional().describe("Invoice line items."),
+  period_end: z.number().optional().describe(
+    "End of the billing period, as a Unix timestamp in seconds.",
+  ),
+  period_start: z.number().optional().describe(
+    "Start of the billing period, as a Unix timestamp in seconds.",
+  ),
+  status: z.enum(["draft", "open", "paid", "uncollectible", "void"]).optional()
+    .describe("Invoice status."),
 }).passthrough();
 
 const CreateTopupSchema = z.object({
   brand: z.string().optional().describe("Card brand (visa, mastercard, etc.)."),
   client_secret: z.string().nullable().optional().describe(
-    "Stripe PaymentIntent client secret.",
+    "Client secret used to complete payment authentication.",
   ).meta({ sensitive: true }),
   last4: z.string().optional().describe("Last 4 digits of card."),
   onboarding: z.boolean().optional().describe(
     "Whether the user was already onboarded.",
   ),
-  payment_intent_id: z.string().optional().describe("Stripe invoice ID."),
+  payment_intent_id: z.string().optional().describe(
+    "Top-up payment identifier.",
+  ),
 }).passthrough();
 
-const GetTopupConfigSchema = z.object({
-  amount: z.number().nullable().optional(),
-  disabledReason: z.string().nullable().optional(),
-  error: z.string().nullable().optional(),
-  lastFailedAt: z.number().nullable().optional(),
-  threshold: z.number().nullable().optional(),
-}).passthrough();
+const AigBillingSetTopupConfigSchema = z.union([
+  z.object({
+    amount: z.number().optional(),
+    threshold: z.number().optional(),
+  }),
+  z.object({
+    amount: z.number().optional(),
+    status: z.enum(["configured"]).optional(),
+    threshold: z.number().optional(),
+  }),
+  z.object({
+    amount: z.number().optional(),
+    client_secret: z.string().optional().meta({ sensitive: true }),
+    setup_intent_id: z.string().optional(),
+    status: z.enum(["requires_action"]).optional(),
+    threshold: z.number().optional(),
+  }),
+]);
 
-const CreateAigBillingSetTopupConfigSchema = z.object({
-  amount: z.number().optional(),
-  threshold: z.number().optional(),
-}).passthrough();
-
-const GetTopupLimitsSchema = z.object({
-  currency: z.string().optional().describe("ISO 4217 currency code."),
-  max_cents: z.number().int().optional(),
-  min_cents: z.number().int().optional().describe(
-    "Minimum allowed top-up amount in cents.",
+const GetTopupEligibilitySchema = z.object({
+  auto_topup: z.object({
+    can_configure: z.boolean().optional(),
+    config: z.object({
+      amount_cents: z.number().int().optional(),
+      threshold_cents: z.number().int().optional(),
+    }).nullable().optional(),
+    limits: z.object({
+      amount_max_cents: z.number().int().optional(),
+      amount_min_cents: z.number().int().optional(),
+      threshold_min_cents: z.number().int().optional(),
+    }).optional(),
+    payment_method_id: z.string().nullable().optional(),
+    state: z.enum([
+      "first_topup_required",
+      "not_configured",
+      "active",
+      "needs_confirmation",
+      "stopped",
+    ]).optional(),
+    stopped_reason: z.enum([
+      "payment_method_removed",
+      "payment_method_changed",
+      "expired_card",
+      "payment_method_not_supported",
+      "prepaid_card_not_supported",
+      "payment_declined",
+      "amount_out_of_range",
+    ]).optional(),
+  }).optional().describe("Auto top-up state."),
+  contract_version: z.union([z.literal(2)]).optional().describe(
+    "Response contract version. Always `2`.",
+  ),
+  evaluated_at: z.string().optional().describe(
+    "When eligibility was evaluated, as an ISO 8601 timestamp.",
+  ),
+  manual_topup: z.object({
+    available: z.boolean().optional(),
+    default_payment_method_id: z.string().nullable().optional(),
+    limits: z.object({
+      currency: z.enum(["USD"]).optional(),
+      max_cents: z.number().int().optional(),
+      min_cents: z.number().int().optional(),
+    }).optional(),
+  }).optional().describe("Manual top-up availability."),
+  payment_methods: z.array(z.object({
+    brand: z.string().optional(),
+    exp_month: z.number().int().optional(),
+    exp_year: z.number().int().optional(),
+    id: z.string().optional(),
+    is_default: z.boolean().optional(),
+    last4: z.string().optional(),
+    type: z.enum(["card", "apple_pay", "google_pay", "link", "paypal", "other"])
+      .optional(),
+    unusable_reason: z.enum([
+      "payment_method_not_supported",
+      "expired_card",
+      "prepaid_card_not_supported",
+      "card_not_3ds_capable",
+    ]).optional(),
+    usable: z.boolean().optional(),
+  })).optional().describe(
+    "The account's payment methods, and whether each can pay for a top-up.",
+  ),
+  reason: z.enum([
+    "NONE",
+    "CONTRACT_BILLING",
+    "ACCOUNT_RESTRICTED",
+    "ELIGIBILITY_UNAVAILABLE",
+    "NO_ELIGIBLE_PAYMENT_METHOD",
+    "DAILY_LIMIT_REACHED",
+  ]).optional().describe(
+    "What prevents a manual top-up, or `NONE`. `CONTRACT_BILLING`: the account is billed by contract. ...",
+  ),
+  status: z.enum(["ready", "blocked", "unavailable"]).optional().describe(
+    "`ready` when a manual top-up is available, `blocked` when `reason` prevents one, or `unavailable`...",
   ),
 }).passthrough();
 
 const CreateAigBillingCheckTopupStatusSchema = z.object({
-  payment_intent_id: z.string().optional(),
-  status: z.enum(["completed", "pending"]).optional(),
+  payment_intent_id: z.string().optional().describe(
+    "Top-up identifier from the request.",
+  ),
+  status: z.enum(["completed", "pending"]).optional().describe(
+    "`completed` once the top-up payment is processed and its credits are added to the balance, `pendi...",
+  ),
 }).passthrough();
 
 const GetUsageHistorySchema = z.object({
@@ -154,7 +248,7 @@ const GetUsageHistorySchema = z.object({
     end_time: z.number().optional(),
     id: z.string().optional(),
     start_time: z.number().optional(),
-  })).optional(),
+  })).optional().describe("Usage cost per window of `value_grouping_window`."),
 }).passthrough();
 
 const AccountProviderItemSchema = z.object({
@@ -164,7 +258,9 @@ const AccountProviderItemSchema = z.object({
   curl_example: z.string().optional(),
   description: z.string().optional(),
   enable: z.boolean().optional(),
-  headers: z.string().max(8192).optional(),
+  headers: z.string().max(8192).optional().describe(
+    "JSON object of extra HTTP headers that AI Gateway sends to the provider. Values can contain crede...",
+  ),
   id: z.string().optional(),
   js_example: z.string().optional(),
   link: z.string().optional(),
@@ -172,7 +268,7 @@ const AccountProviderItemSchema = z.object({
   modified_at: z.string().optional(),
   name: z.string().optional(),
   position: z.number().int().optional(),
-  slug: z.string().optional(),
+  slug: z.string().regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional(),
 }).passthrough();
 
 const ListAccountProviderSchema = z.object({
@@ -242,7 +338,9 @@ const GetAigConfigFetchAccountProviderSchema = z.object({
   curl_example: z.string().optional(),
   description: z.string().optional(),
   enable: z.boolean().optional(),
-  headers: z.string().max(8192).optional(),
+  headers: z.string().max(8192).optional().describe(
+    "JSON object of extra HTTP headers that AI Gateway sends to the provider. Values can contain crede...",
+  ).meta({ sensitive: true }),
   id: z.string().optional(),
   js_example: z.string().optional(),
   link: z.string().optional(),
@@ -250,7 +348,7 @@ const GetAigConfigFetchAccountProviderSchema = z.object({
   modified_at: z.string().optional(),
   name: z.string().optional(),
   position: z.number().int().optional(),
-  slug: z.string().optional(),
+  slug: z.string().regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional(),
 }).passthrough();
 
 const EvaluatorsItemSchema = z.object({
@@ -277,7 +375,12 @@ const ListEvaluatorsSchema = z.object({
 });
 
 const GatewayItemSchema = z.object({
-  authentication: z.boolean().optional(),
+  authentication: z.boolean().optional().describe(
+    "Require authentication for gateway access. New gateways must have authentication enabled. Once en...",
+  ),
+  byok_only: z.boolean().optional().describe(
+    "Requires customer-provided provider credentials and prevents fallback to Unified Billing.",
+  ),
   cache_invalidate_on_update: z.boolean().optional(),
   cache_ttl: z.number().int().min(0).nullable().optional(),
   collect_logs: z.boolean().optional(),
@@ -299,6 +402,13 @@ const GatewayItemSchema = z.object({
       })).optional(),
     }),
   ]).optional(),
+  fedramp_level: z.enum(["fedramp-medium", "fedramp-high"]).nullable()
+    .optional().describe(
+      "FedRAMP compliance level: fedramp-medium or fedramp-high.",
+    ),
+  fedramp_mode: z.enum(["prefer", "require"]).nullable().optional().describe(
+    'FedRAMP enforcement mode. "prefer" prioritizes compliant connectors but allows fallback. "require...',
+  ),
   guardrails: z.object({
     prompt: z.object({
       P1: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -307,6 +417,7 @@ const GatewayItemSchema = z.object({
       S11: z.enum(["FLAG", "BLOCK"]).optional(),
       S12: z.enum(["FLAG", "BLOCK"]).optional(),
       S13: z.enum(["FLAG", "BLOCK"]).optional(),
+      S14: z.enum(["FLAG", "BLOCK"]).optional(),
       S2: z.enum(["FLAG", "BLOCK"]).optional(),
       S3: z.enum(["FLAG", "BLOCK"]).optional(),
       S4: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -323,6 +434,7 @@ const GatewayItemSchema = z.object({
       S11: z.enum(["FLAG", "BLOCK"]).optional(),
       S12: z.enum(["FLAG", "BLOCK"]).optional(),
       S13: z.enum(["FLAG", "BLOCK"]).optional(),
+      S14: z.enum(["FLAG", "BLOCK"]).optional(),
       S2: z.enum(["FLAG", "BLOCK"]).optional(),
       S3: z.enum(["FLAG", "BLOCK"]).optional(),
       S4: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -335,8 +447,14 @@ const GatewayItemSchema = z.object({
   }).nullable().optional(),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("gateway id"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
+  internal_id: z.string().optional().describe(
+    "Identifier of the AI Gateway that never changes and is never reused, even after the gateway is de...",
+  ),
   is_default: z.boolean().optional(),
+  log_classification: z.boolean().optional(),
   log_management: z.number().int().min(10000).max(10000000).nullable()
     .optional(),
   log_management_strategy: z.enum(["STOP_INSERTING", "DELETE_OLDEST"])
@@ -344,6 +462,9 @@ const GatewayItemSchema = z.object({
   logpush: z.boolean().optional(),
   logpush_public_key: z.string().min(16).max(1024).nullable().optional(),
   modified_at: z.string().optional(),
+  multiprovider_enabled: z.boolean().optional().describe(
+    "Lets requests to a model use every provider that serves it. When off, a model uses only the provi...",
+  ),
   otel: z.array(z.object({
     authorization: z.string().max(256).optional(),
     content_type: z.enum(["json", "protobuf"]).optional().default("json"),
@@ -355,9 +476,8 @@ const GatewayItemSchema = z.object({
   rate_limiting_technique: z.enum(["fixed", "sliding"]).nullable().optional(),
   retry_backoff: z.enum(["constant", "linear", "exponential"]).nullable()
     .optional().describe("Backoff strategy for retry delays"),
-  retry_delay: z.number().int().min(0).max(5000).nullable().optional().describe(
-    "Delay between retry attempts in milliseconds (0-5000)",
-  ),
+  retry_delay: z.number().int().min(0).max(60000).nullable().optional()
+    .describe("Delay between retry attempts in milliseconds (0-60000)"),
   retry_max_attempts: z.number().int().min(1).max(5).nullable().optional()
     .describe("Maximum number of retry attempts for failed requests (1-5)"),
   spend_limits: z.object({
@@ -365,7 +485,7 @@ const GatewayItemSchema = z.object({
     rules: z.array(z.object({
       enabled: z.boolean().optional().default(true),
       id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional()
-        .default("49a87635"),
+        .default("00000000"),
       limit: z.number().min(0).optional(),
       limitType: z.enum(["cost"]).optional(),
       metadata: z.record(
@@ -392,17 +512,20 @@ const GatewayItemSchema = z.object({
       window: z.number().int().min(0).optional(),
     })).optional().default([]),
   }).nullable().optional(),
-  store_id: z.string().nullable().optional(),
+  store_id: z.string().nullable().optional().describe(
+    "Secrets Store used by this gateway. Omit on update to keep the current store. Cannot be cleared w...",
+  ),
   stripe: z.object({
     authorization: z.string().optional(),
     usage_events: z.array(z.object({
       payload: z.string().optional(),
     })).optional(),
   }).nullable().optional(),
-  workers_ai_billing_mode: z.enum(["postpaid"]).optional().default("postpaid")
-    .describe(
-      "Controls how Workers AI inference calls routed through this gateway are billed. Only 'postpaid' i...",
-    ),
+  workers_ai_billing_mode: z.enum(["postpaid", "unified"]).optional().default(
+    "postpaid",
+  ).describe(
+    "Controls how Workers AI inference calls routed through this gateway are billed. 'postpaid' bills ...",
+  ),
   zdr: z.boolean().optional(),
 }).passthrough();
 
@@ -417,6 +540,58 @@ const ListGatewaySchema = z.object({
     "Extension that collected this data",
   ),
 });
+
+const CustomDomainItemSchema = z.object({
+  created_at: z.number().int().optional().describe("epoch milliseconds"),
+  gateway_id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
+  hostname: z.string().min(1).max(253).regex(
+    new RegExp(
+      "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
+    ),
+  ).optional().describe(
+    "Custom hostname that you own, such as `ai.example.com`.",
+  ),
+  modified_at: z.number().int().optional().describe("epoch milliseconds"),
+  ssl_hostname_id: z.string().nullable().optional(),
+  status: z.enum(["initializing", "pending_dcv", "active", "blocked", "error"])
+    .optional(),
+}).passthrough();
+
+const ListCustomDomainSchema = z.object({
+  items: z.array(CustomDomainItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const GetAigConfigFetchCustomDomainSchema = z.object({
+  created_at: z.number().int().optional().describe("epoch milliseconds"),
+  gateway_id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
+  hostname: z.string().min(1).max(253).regex(
+    new RegExp(
+      "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
+    ),
+  ).optional().describe(
+    "Custom hostname that you own, such as `ai.example.com`.",
+  ),
+  modified_at: z.number().int().optional().describe("epoch milliseconds"),
+  ssl_hostname_id: z.string().nullable().optional(),
+  status: z.enum(["initializing", "pending_dcv", "active", "blocked", "error"])
+    .optional(),
+}).passthrough();
 
 const DatasetItemSchema = z.object({
   created_at: z.string().optional(),
@@ -442,7 +617,9 @@ const DatasetItemSchema = z.object({
   })).optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("gateway id"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
   id: z.string().optional(),
   modified_at: z.string().optional(),
   name: z.string().optional(),
@@ -484,7 +661,9 @@ const GetAigConfigFetchDatasetSchema = z.object({
   })).optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("gateway id"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
   id: z.string().optional(),
   modified_at: z.string().optional(),
   name: z.string().optional(),
@@ -525,7 +704,9 @@ const EvaluationsItemSchema = z.object({
   })).optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("gateway id"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
   id: z.string().optional(),
   modified_at: z.string().optional(),
   name: z.string().optional(),
@@ -591,7 +772,9 @@ const GetAigConfigFetchEvaluationsSchema = z.object({
   })).optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("gateway id"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
   id: z.string().optional(),
   modified_at: z.string().optional(),
   name: z.string().optional(),
@@ -612,6 +795,9 @@ const GetAigConfigFetchEvaluationsSchema = z.object({
 
 const GatewayLogsItemSchema = z.object({
   cached: z.boolean().optional(),
+  collect_log_payload: z.boolean().nullable().optional().describe(
+    "Whether the request and response bodies were eligible to be stored. False when the request sent `...",
+  ),
   cost: z.number().optional(),
   created_at: z.string().optional(),
   custom_cost: z.boolean().optional(),
@@ -646,6 +832,9 @@ const ListGatewayLogsSchema = z.object({
 
 const GetGatewayLogDetailSchema = z.object({
   cached: z.boolean().optional(),
+  collect_log_payload: z.boolean().nullable().optional().describe(
+    "Whether the request and response bodies were eligible to be stored. False when the request sent `...",
+  ),
   cost: z.number().optional(),
   created_at: z.string().optional(),
   custom_cost: z.boolean().optional(),
@@ -657,12 +846,12 @@ const GetGatewayLogDetailSchema = z.object({
   path: z.string().optional(),
   provider: z.string().optional(),
   request_content_type: z.string().optional(),
-  request_head: z.string().optional(),
+  request_head: z.string().nullable().optional(),
   request_head_complete: z.boolean().optional(),
   request_size: z.number().int().optional(),
   request_type: z.string().optional(),
   response_content_type: z.string().optional(),
-  response_head: z.string().optional(),
+  response_head: z.string().nullable().optional(),
   response_head_complete: z.boolean().optional(),
   response_size: z.number().int().optional(),
   status_code: z.number().int().optional(),
@@ -678,13 +867,70 @@ const GetGatewayLogRequestSchema = z.object({}).passthrough();
 
 const GetGatewayLogResponseSchema = z.object({}).passthrough();
 
+const ModelAliasesItemSchema = z.object({
+  created_at: z.number().int().optional(),
+  gateway_id: z.string().optional(),
+  id: z.string().optional(),
+  models: z.array(z.object({
+    model: z.string().min(1).max(256).optional(),
+    providers: z.array(
+      z.string().min(1).max(64).regex(new RegExp("^[a-z0-9-]+$")),
+    ).optional(),
+  })).optional(),
+  name: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9]+(?:[._-][a-z0-9]+)*$"),
+  ).optional(),
+  routing: z.object({
+    algorithm: z.enum(["preferred", "smart"]).optional(),
+    mode: z.enum(["cost", "best"]).optional(),
+  }).nullable().optional(),
+  updated_at: z.number().int().optional(),
+}).passthrough();
+
+const ListModelAliasesSchema = z.object({
+  items: z.array(ModelAliasesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CreateModelAliasSchema = z.object({
+  created_at: z.number().int().optional(),
+  gateway_id: z.string().optional(),
+  id: z.string().optional(),
+  models: z.array(z.object({
+    model: z.string().min(1).max(256).optional(),
+    providers: z.array(
+      z.string().min(1).max(64).regex(new RegExp("^[a-z0-9-]+$")),
+    ).optional(),
+  })).optional(),
+  name: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9]+(?:[._-][a-z0-9]+)*$"),
+  ).optional(),
+  routing: z.object({
+    algorithm: z.enum(["preferred", "smart"]).optional(),
+    mode: z.enum(["cost", "best"]).optional(),
+  }).nullable().optional(),
+  updated_at: z.number().int().optional(),
+}).passthrough();
+
 const ProvidersItemSchema = z.object({
   alias: z.string().optional(),
   default_config: z.boolean().optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("gateway id"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
   id: z.string().optional(),
+  last_used_at: z.string().nullable().optional().describe(
+    "UTC date (YYYY-MM-DD) the gateway last selected this key to authenticate a request to the provide...",
+  ),
   modified_at: z.string().optional(),
   provider_slug: z.string().optional(),
   rate_limit: z.number().optional(),
@@ -704,6 +950,39 @@ const ListProvidersSchema = z.object({
     "Extension that collected this data",
   ),
 });
+
+const GetAigConfigFetchProvidersSchema = z.object({
+  alias: z.string().optional(),
+  default_config: z.boolean().optional(),
+  gateway_id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
+  id: z.string().optional(),
+  last_used_at: z.string().nullable().optional().describe(
+    "UTC date (YYYY-MM-DD) the gateway last selected this key to authenticate a request to the provide...",
+  ),
+  modified_at: z.string().optional(),
+  provider_slug: z.string().optional(),
+  rate_limit: z.number().optional(),
+  rate_limit_period: z.number().optional().default(60),
+  secret_id: z.string().optional(),
+  secret_preview: z.string().optional(),
+}).passthrough();
+
+const AigConfigTestProvidersSchema = z.object({
+  httpStatus: z.number().nullable().optional(),
+  providerSlug: z.string().optional(),
+  reason: z.enum([
+    "unsupported_provider",
+    "missing_secret",
+    "provider_error",
+    "permission_denied",
+    "request_failed",
+  ]).optional(),
+  status: z.enum(["valid", "invalid", "error"]).optional(),
+}).passthrough();
 
 const ListGatewayDynamicRoutesSchema = z.object({
   data: z.object({
@@ -780,7 +1059,7 @@ const ListGatewayDynamicRoutesSchema = z.object({
       gateway_id: z.string().optional(),
       id: z.string().optional(),
       modified_at: z.string().optional(),
-      name: z.string().optional(),
+      name: z.string().min(1).optional(),
       version: z.object({
         active: z.enum(["true", "false"]).optional(),
         created_at: z.string().optional(),
@@ -885,7 +1164,7 @@ const CreateAigConfigPostGatewayDynamicRouteSchema = z.object({
   gateway_id: z.string().optional(),
   id: z.string().optional(),
   modified_at: z.string().optional(),
-  name: z.string().optional(),
+  name: z.string().min(1).optional(),
   version: z.object({
     active: z.enum(["true", "false"]).optional(),
     created_at: z.string().optional(),
@@ -987,7 +1266,7 @@ const GetGatewayDynamicRouteSchema = z.object({
   gateway_id: z.string().optional(),
   id: z.string().optional(),
   modified_at: z.string().optional(),
-  name: z.string().optional(),
+  name: z.string().min(1).optional(),
   version: z.object({
     active: z.enum(["true", "false"]).optional(),
     created_at: z.string().optional(),
@@ -1099,7 +1378,7 @@ const CreateAigConfigPostGatewayDynamicRouteDeploymentSchema = z.object({
   gateway_id: z.string().optional(),
   id: z.string().optional(),
   modified_at: z.string().optional(),
-  name: z.string().optional(),
+  name: z.string().min(1).optional(),
 }).passthrough();
 
 const ListGatewayDynamicRouteVersionsSchema = z.object({
@@ -1206,7 +1485,7 @@ const CreateAigConfigPostGatewayDynamicRouteVersionSchema = z.object({
   gateway_id: z.string().optional(),
   id: z.string().optional(),
   modified_at: z.string().optional(),
-  name: z.string().optional(),
+  name: z.string().min(1).optional(),
 }).passthrough();
 
 const GetGatewayDynamicRouteVersionSchema = z.object({
@@ -1299,14 +1578,19 @@ const GetGatewayDynamicRouteVersionSchema = z.object({
   id: z.string().optional(),
   is_valid: z.boolean().optional(),
   modified_at: z.string().optional(),
-  name: z.string().optional(),
+  name: z.string().min(1).optional(),
   version_id: z.string().optional(),
 }).passthrough();
 
 const GetGatewayUrlSchema = z.string();
 
 const GetAigConfigFetchGatewaySchema = z.object({
-  authentication: z.boolean().optional(),
+  authentication: z.boolean().optional().describe(
+    "Require authentication for gateway access. New gateways must have authentication enabled. Once en...",
+  ),
+  byok_only: z.boolean().optional().describe(
+    "Requires customer-provided provider credentials and prevents fallback to Unified Billing.",
+  ),
   cache_invalidate_on_update: z.boolean().optional(),
   cache_ttl: z.number().int().min(0).nullable().optional(),
   collect_logs: z.boolean().optional(),
@@ -1328,6 +1612,13 @@ const GetAigConfigFetchGatewaySchema = z.object({
       })).optional(),
     }),
   ]).optional(),
+  fedramp_level: z.enum(["fedramp-medium", "fedramp-high"]).nullable()
+    .optional().describe(
+      "FedRAMP compliance level: fedramp-medium or fedramp-high.",
+    ),
+  fedramp_mode: z.enum(["prefer", "require"]).nullable().optional().describe(
+    'FedRAMP enforcement mode. "prefer" prioritizes compliant connectors but allows fallback. "require...',
+  ),
   guardrails: z.object({
     prompt: z.object({
       P1: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -1336,6 +1627,7 @@ const GetAigConfigFetchGatewaySchema = z.object({
       S11: z.enum(["FLAG", "BLOCK"]).optional(),
       S12: z.enum(["FLAG", "BLOCK"]).optional(),
       S13: z.enum(["FLAG", "BLOCK"]).optional(),
+      S14: z.enum(["FLAG", "BLOCK"]).optional(),
       S2: z.enum(["FLAG", "BLOCK"]).optional(),
       S3: z.enum(["FLAG", "BLOCK"]).optional(),
       S4: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -1352,6 +1644,7 @@ const GetAigConfigFetchGatewaySchema = z.object({
       S11: z.enum(["FLAG", "BLOCK"]).optional(),
       S12: z.enum(["FLAG", "BLOCK"]).optional(),
       S13: z.enum(["FLAG", "BLOCK"]).optional(),
+      S14: z.enum(["FLAG", "BLOCK"]).optional(),
       S2: z.enum(["FLAG", "BLOCK"]).optional(),
       S3: z.enum(["FLAG", "BLOCK"]).optional(),
       S4: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -1364,8 +1657,14 @@ const GetAigConfigFetchGatewaySchema = z.object({
   }).nullable().optional(),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("gateway id"),
+  ).optional().describe(
+    "Unique identifier of the AI Gateway within the account.",
+  ),
+  internal_id: z.string().optional().describe(
+    "Identifier of the AI Gateway that never changes and is never reused, even after the gateway is de...",
+  ),
   is_default: z.boolean().optional(),
+  log_classification: z.boolean().optional(),
   log_management: z.number().int().min(10000).max(10000000).nullable()
     .optional(),
   log_management_strategy: z.enum(["STOP_INSERTING", "DELETE_OLDEST"])
@@ -1373,6 +1672,9 @@ const GetAigConfigFetchGatewaySchema = z.object({
   logpush: z.boolean().optional(),
   logpush_public_key: z.string().min(16).max(1024).nullable().optional(),
   modified_at: z.string().optional(),
+  multiprovider_enabled: z.boolean().optional().describe(
+    "Lets requests to a model use every provider that serves it. When off, a model uses only the provi...",
+  ),
   otel: z.array(z.object({
     authorization: z.string().max(256).optional(),
     content_type: z.enum(["json", "protobuf"]).optional().default("json"),
@@ -1384,9 +1686,8 @@ const GetAigConfigFetchGatewaySchema = z.object({
   rate_limiting_technique: z.enum(["fixed", "sliding"]).nullable().optional(),
   retry_backoff: z.enum(["constant", "linear", "exponential"]).nullable()
     .optional().describe("Backoff strategy for retry delays"),
-  retry_delay: z.number().int().min(0).max(5000).nullable().optional().describe(
-    "Delay between retry attempts in milliseconds (0-5000)",
-  ),
+  retry_delay: z.number().int().min(0).max(60000).nullable().optional()
+    .describe("Delay between retry attempts in milliseconds (0-60000)"),
   retry_max_attempts: z.number().int().min(1).max(5).nullable().optional()
     .describe("Maximum number of retry attempts for failed requests (1-5)"),
   spend_limits: z.object({
@@ -1394,7 +1695,7 @@ const GetAigConfigFetchGatewaySchema = z.object({
     rules: z.array(z.object({
       enabled: z.boolean().optional().default(true),
       id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional()
-        .default("422c671d"),
+        .default("00000000"),
       limit: z.number().min(0).optional(),
       limitType: z.enum(["cost"]).optional(),
       metadata: z.record(
@@ -1421,132 +1722,42 @@ const GetAigConfigFetchGatewaySchema = z.object({
       window: z.number().int().min(0).optional(),
     })).optional().default([]),
   }).nullable().optional(),
-  store_id: z.string().nullable().optional(),
+  store_id: z.string().nullable().optional().describe(
+    "Secrets Store used by this gateway. Omit on update to keep the current store. Cannot be cleared w...",
+  ),
   stripe: z.object({
     authorization: z.string().optional(),
     usage_events: z.array(z.object({
       payload: z.string().optional(),
     })).optional(),
   }).nullable().optional(),
-  workers_ai_billing_mode: z.enum(["postpaid"]).optional().default("postpaid")
-    .describe(
-      "Controls how Workers AI inference calls routed through this gateway are billed. Only 'postpaid' i...",
-    ),
+  workers_ai_billing_mode: z.enum(["postpaid", "unified"]).optional().default(
+    "postpaid",
+  ).describe(
+    "Controls how Workers AI inference calls routed through this gateway are billed. 'postpaid' bills ...",
+  ),
   zdr: z.boolean().optional(),
 }).passthrough();
 
-const InstancesItemSchema = z.object({
-  ai_gateway_id: z.string().nullable().optional(),
-  ai_search_model: z.union([
-    z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-    z.literal("@cf/zai-org/glm-4.7-flash"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-    z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-    z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-    z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-    z.literal("@cf/moonshotai/kimi-k2-instruct"),
-    z.literal("@cf/google/gemma-3-12b-it"),
-    z.literal("@cf/google/gemma-4-26b-a4b-it"),
-    z.literal("@cf/moonshotai/kimi-k2.5"),
-    z.literal("anthropic/claude-3-7-sonnet"),
-    z.literal("anthropic/claude-sonnet-4"),
-    z.literal("anthropic/claude-opus-4"),
-    z.literal("anthropic/claude-3-5-haiku"),
-    z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-    z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-    z.literal("cerebras/llama-3.3-70b"),
-    z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-    z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-    z.literal("cerebras/gpt-oss-120b"),
-    z.literal("google-ai-studio/gemini-2.5-flash"),
-    z.literal("google-ai-studio/gemini-2.5-pro"),
-    z.literal("grok/grok-4"),
-    z.literal("groq/llama-3.3-70b-versatile"),
-    z.literal("groq/llama-3.1-8b-instant"),
-    z.literal("openai/gpt-5"),
-    z.literal("openai/gpt-5-mini"),
-    z.literal("openai/gpt-5-nano"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  cache: z.boolean().optional().default(true),
-  cache_threshold: z.enum([
-    "super_strict_match",
-    "close_enough",
-    "flexible_friend",
-    "anything_goes",
-  ]).optional().default("close_enough"),
-  cache_ttl: z.union([
-    z.union([z.literal(600)]),
-    z.union([z.literal(1800)]),
-    z.union([z.literal(3600)]),
-    z.union([z.literal(7200)]),
-    z.union([z.literal(21600)]),
-    z.union([z.literal(43200)]),
-    z.union([z.literal(86400)]),
-    z.union([z.literal(172800)]),
-    z.union([z.literal(259200)]),
-    z.union([z.literal(518400)]),
-  ]).optional().default(172800).describe(
-    "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (1h), 7200 (2h), 2160...",
+const GetLoggingStateSchema = z.object({
+  migrated_at: z.number().int().min(0).nullable().optional(),
+  migration_available: z.boolean().optional(),
+  platform: z.enum(["legacy", "workers_observability"]).optional(),
+}).passthrough();
+
+const PatchLoggingStateSchema = z.object({
+  migrated_at: z.number().int().min(0).nullable().optional(),
+  migration_available: z.boolean().optional(),
+  platform: z.enum(["legacy", "workers_observability"]).optional(),
+}).passthrough();
+
+const NamespacesItemSchema = z.object({
+  created_at: z.string().nullable().optional(),
+  description: z.string().max(256).nullable().optional().describe(
+    "Optional description for the namespace. Max 256 characters.",
   ),
-  chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
-  chunk_size: z.number().int().min(64).optional(),
-  created_at: z.string().optional(),
-  created_by: z.string().nullable().optional(),
-  custom_metadata: z.array(z.object({
-    data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
-    field_name: z.string().min(1).max(64).optional(),
-  })).optional(),
-  embedding_model: z.union([
-    z.literal("@cf/qwen/qwen3-embedding-0.6b"),
-    z.literal("@cf/qwen/qwen3-vl-embedding-2b"),
-    z.literal("@cf/baai/bge-m3"),
-    z.literal("@cf/baai/bge-large-en-v1.5"),
-    z.literal("@cf/google/embeddinggemma-300m"),
-    z.literal("google-ai-studio/gemini-embedding-001"),
-    z.literal("google-ai-studio/gemini-embedding-2-preview"),
-    z.literal("google-ai-studio/gemini-embedding-2"),
-    z.literal("openai/text-embedding-3-small"),
-    z.literal("openai/text-embedding-3-large"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  enable: z.boolean().optional().default(true),
-  engine_version: z.number().optional().default(3),
-  fusion_method: z.enum(["max", "rrf"]).optional().default("rrf"),
-  hybrid_search_enabled: z.boolean().optional().default(false).describe(
-    "Deprecated — use index_method instead.",
-  ),
-  id: z.string().min(1).max(64).regex(
-    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe(
-    "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-  ),
-  index_method: z.object({
-    keyword: z.boolean().optional(),
-    vector: z.boolean().optional(),
-  }).optional().default({ "keyword": false, "vector": true }).describe(
-    "Controls which storage backends are used during indexing. Defaults to vector-only.",
-  ),
-  indexing_options: z.object({
-    keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
-      "porter",
-    ),
-  }).nullable().optional(),
-  last_activity: z.string().nullable().optional(),
-  max_num_results: z.number().int().min(1).max(50).optional().default(10),
-  metadata: z.object({
-    created_from_aisearch_wizard: z.boolean().optional(),
-    worker_domain: z.string().optional(),
-  }).optional(),
-  modified_at: z.string().optional(),
-  modified_by: z.string().nullable().optional(),
-  namespace: z.string().regex(
-    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
-  ).nullable().optional(),
-  paused: z.boolean().optional().default(false),
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
+    .optional(),
   public_endpoint_id: z.string().nullable().optional(),
   public_endpoint_params: z.object({
     authorized_hosts: z.array(z.string()).optional(),
@@ -1554,7 +1765,13 @@ const InstancesItemSchema = z.object({
       disabled: z.boolean().optional().default(false),
     }).optional(),
     custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
+    default_domain_enabled: z.boolean().optional().default(true),
     enabled: z.boolean().optional().default(false),
+    instances_allowed: z.array(
+      z.string().min(1).max(64).regex(
+        new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+      ),
+    ).optional().default([]),
     mcp: z.object({
       description: z.string().optional().default(
         "Finds exactly what you're looking for",
@@ -1569,66 +1786,180 @@ const InstancesItemSchema = z.object({
     search_endpoint: z.object({
       disabled: z.boolean().optional().default(false),
     }).optional(),
-  }).optional(),
-  reranking: z.boolean().optional().default(false),
-  reranking_model: z.union([
-    z.literal("@cf/baai/bge-reranker-base"),
-    z.literal(""),
+  }).nullable().optional(),
+}).passthrough();
+
+const ListNamespacesSchema = z.object({
+  items: z.array(NamespacesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CreateNamespaceSchema = z.object({
+  created_at: z.string().nullable().optional(),
+  description: z.string().max(256).nullable().optional().describe(
+    "Optional description for the namespace. Max 256 characters.",
+  ),
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
+    .optional(),
+  public_endpoint_id: z.string().nullable().optional(),
+  public_endpoint_params: z.object({
+    authorized_hosts: z.array(z.string()).optional(),
+    chat_completions_endpoint: z.object({
+      disabled: z.boolean().optional().default(false),
+    }).optional(),
+    custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
+    default_domain_enabled: z.boolean().optional().default(true),
+    enabled: z.boolean().optional().default(false),
+    instances_allowed: z.array(
+      z.string().min(1).max(64).regex(
+        new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+      ),
+    ).optional().default([]),
+    mcp: z.object({
+      description: z.string().optional().default(
+        "Finds exactly what you're looking for",
+      ),
+      disabled: z.boolean().optional().default(false),
+    }).optional(),
+    rate_limit: z.object({
+      period_ms: z.number().int().min(60000).max(3600000).optional(),
+      requests: z.number().int().min(1).optional(),
+      technique: z.enum(["fixed", "sliding"]).optional(),
+    }).optional(),
+    search_endpoint: z.object({
+      disabled: z.boolean().optional().default(false),
+    }).optional(),
+  }).nullable().optional(),
+}).passthrough();
+
+const InstancesItemSchema = z.object({
+  ai_gateway_id: z.string().nullable().optional(),
+  ai_search_model: z.string().nullable().optional(),
+  cache: z.boolean().optional(),
+  cache_threshold: z.union([
+    z.literal("super_strict_match"),
+    z.literal("close_enough"),
+    z.literal("flexible_friend"),
+    z.literal("anything_goes"),
     z.literal(null),
   ]).nullable().optional(),
+  cache_ttl: z.union([
+    z.union([z.literal(600)]),
+    z.union([z.literal(1800)]),
+    z.union([z.literal(3600)]),
+    z.union([z.literal(7200)]),
+    z.union([z.literal(21600)]),
+    z.union([z.literal(43200)]),
+    z.union([z.literal(86400)]),
+    z.union([z.literal(172800)]),
+    z.union([z.literal(259200)]),
+    z.union([z.literal(518400)]),
+  ]).optional(),
+  chunk: z.boolean().optional(),
+  chunk_overlap: z.number().nullable().optional(),
+  chunk_size: z.number().nullable().optional(),
+  created_at: z.string().optional(),
+  created_by: z.string().nullable().optional(),
+  custom_metadata: z.array(z.object({
+    data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
+    field_name: z.string().optional(),
+  })).nullable().optional(),
+  embedding_model: z.string().nullable().optional(),
+  enable: z.boolean().optional(),
+  engine_version: z.number().optional(),
+  fusion_method: z.enum(["max", "rrf"]).optional(),
+  hybrid_search_enabled: z.boolean().optional(),
+  id: z.string().optional(),
+  index_method: z.object({
+    keyword: z.boolean().optional(),
+    vector: z.boolean().optional(),
+  }).optional(),
+  indexing_options: z.object({
+    file_summary: z.boolean().optional(),
+    keyword_tokenizer: z.enum(["porter", "trigram"]).optional(),
+    use_ocr: z.boolean().optional(),
+  }).nullable().optional(),
+  last_activity: z.string().nullable().optional(),
+  max_num_results: z.number().nullable().optional(),
+  metadata: z.object({
+    created_from_aisearch_wizard: z.boolean().optional(),
+    created_from_emdash_plugin: z.object({
+      type: z.enum(["native", "rest"]).optional(),
+      version: z.string().optional(),
+    }).optional(),
+    worker_domain: z.string().optional(),
+  }).nullable().optional(),
+  modified_at: z.string().optional(),
+  modified_by: z.string().nullable().optional(),
+  namespace: z.string().regex(
+    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+  ).optional(),
+  paused: z.boolean().optional(),
+  public_endpoint_id: z.string().nullable().optional(),
+  public_endpoint_params: z.object({
+    authorized_hosts: z.array(z.string()).optional(),
+    chat_completions_endpoint: z.object({
+      disabled: z.boolean().optional(),
+    }).optional(),
+    custom_domains: z.array(
+      z.string().min(1).max(253).regex(
+        new RegExp("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}$"),
+      ),
+    ).nullable().optional(),
+    default_domain_enabled: z.boolean().optional(),
+    enabled: z.boolean().optional(),
+    mcp: z.object({
+      description: z.string().optional(),
+      disabled: z.boolean().optional(),
+    }).optional(),
+    rate_limit: z.object({
+      period_ms: z.number().int().min(60000).max(3600000).optional(),
+      requests: z.number().int().min(1).optional(),
+      technique: z.enum(["fixed", "sliding"]).optional(),
+    }).optional(),
+    search_endpoint: z.object({
+      disabled: z.boolean().optional(),
+    }).optional(),
+  }).nullable().optional(),
+  reranking: z.boolean().optional(),
+  reranking_model: z.string().nullable().optional(),
   retrieval_options: z.object({
     boost_by: z.array(z.object({
+      dataType: z.enum(["number", "datetime", "text", "boolean"]).optional(),
       direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
       field: z.string().min(1).max(64).optional(),
     })).optional(),
     keyword_match_mode: z.enum(["and", "or"]).optional(),
   }).nullable().optional(),
-  rewrite_model: z.union([
-    z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-    z.literal("@cf/zai-org/glm-4.7-flash"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-    z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-    z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-    z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-    z.literal("@cf/moonshotai/kimi-k2-instruct"),
-    z.literal("@cf/google/gemma-3-12b-it"),
-    z.literal("@cf/google/gemma-4-26b-a4b-it"),
-    z.literal("@cf/moonshotai/kimi-k2.5"),
-    z.literal("anthropic/claude-3-7-sonnet"),
-    z.literal("anthropic/claude-sonnet-4"),
-    z.literal("anthropic/claude-opus-4"),
-    z.literal("anthropic/claude-3-5-haiku"),
-    z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-    z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-    z.literal("cerebras/llama-3.3-70b"),
-    z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-    z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-    z.literal("cerebras/gpt-oss-120b"),
-    z.literal("google-ai-studio/gemini-2.5-flash"),
-    z.literal("google-ai-studio/gemini-2.5-pro"),
-    z.literal("grok/grok-4"),
-    z.literal("groq/llama-3.3-70b-versatile"),
-    z.literal("groq/llama-3.1-8b-instant"),
-    z.literal("openai/gpt-5"),
-    z.literal("openai/gpt-5-mini"),
-    z.literal("openai/gpt-5-nano"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  rewrite_query: z.boolean().optional().default(false),
-  score_threshold: z.number().min(0).max(1).optional().default(0.4),
+  rewrite_model: z.string().nullable().optional(),
+  rewrite_query: z.boolean().optional(),
+  score_threshold: z.number().nullable().optional(),
   source: z.string().nullable().optional(),
   source_params: z.object({
-    exclude_items: z.array(
-      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
-    ).optional(),
-    include_items: z.array(
-      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
-    ).optional(),
+    d1: z.object({
+      query: z.string().optional(),
+      template: z.string().optional(),
+    }).optional(),
+    exclude_items: z.array(z.string()).optional(),
+    include_items: z.array(z.string()).optional(),
     prefix: z.string().optional(),
-    r2_jurisdiction: z.string().optional().default("default"),
+    r2_jurisdiction: z.string().optional(),
     web_crawler: z.object({
+      discover_options: z.object({
+        depth: z.number().min(1).max(100000).optional(),
+        include_external_links: z.boolean().optional(),
+        include_subdomains: z.boolean().optional(),
+        limit: z.number().min(1).max(100000).optional(),
+        max_age: z.number().min(0).max(604800).optional(),
+        source: z.enum(["all", "sitemaps", "links"]).optional(),
+      }).optional(),
       parse_options: z.object({
         content_selector: z.array(z.object({
           path: z.string().min(1).max(200).optional(),
@@ -1638,14 +1969,20 @@ const InstancesItemSchema = z.object({
           z.string(),
           z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
         ).optional(),
-        include_images: z.boolean().optional().default(false),
+        include_images: z.boolean().optional(),
         specific_sitemaps: z.array(z.string()).optional(),
-        use_browser_rendering: z.boolean().optional().default(true),
+        use_browser_rendering: z.boolean().optional(),
       }).optional(),
-      parse_type: z.enum(["sitemap", "crawl"]).optional().default("sitemap"),
-    }).optional().default({ "parse_type": "sitemap" }),
+      parse_type: z.enum(["sitemap", "discover"]).optional(),
+    }).optional(),
   }).nullable().optional(),
-  status: z.string().optional().default("waiting"),
+  status: z.string().optional(),
+  summarization: z.boolean().optional().describe(
+    "Deprecated and ignored during indexing and search; changing it still re-indexes existing files on...",
+  ),
+  summarization_model: z.string().nullable().optional().describe(
+    "Deprecated and ignored during indexing and search; changing it still re-indexes existing files on...",
+  ),
   sync_interval: z.union([
     z.union([z.literal(900)]),
     z.union([z.literal(1800)]),
@@ -1655,12 +1992,19 @@ const InstancesItemSchema = z.object({
     z.union([z.literal(21600)]),
     z.union([z.literal(43200)]),
     z.union([z.literal(86400)]),
-  ]).optional().default(21600).describe(
-    "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
+  ]).optional(),
+  system_prompt_ai_search: z.string().nullable().optional(),
+  system_prompt_index_summarization: z.string().nullable().optional().describe(
+    "Deprecated and has no effect. Use indexing_options.file_summary instead.",
   ),
-  token_id: z.string().optional(),
-  type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
-    .nullable().optional(),
+  system_prompt_rewrite_query: z.string().nullable().optional(),
+  token_id: z.string().nullable().optional(),
+  type: z.union([
+    z.literal("r2"),
+    z.literal("web-crawler"),
+    z.literal("d1"),
+    z.literal(null),
+  ]).nullable().optional(),
 }).passthrough();
 
 const ListInstancesSchema = z.object({
@@ -1677,39 +2021,9 @@ const ListInstancesSchema = z.object({
 
 const CreateInstanceSchema = z.object({
   ai_gateway_id: z.string().nullable().optional(),
-  ai_search_model: z.union([
-    z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-    z.literal("@cf/zai-org/glm-4.7-flash"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-    z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-    z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-    z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-    z.literal("@cf/moonshotai/kimi-k2-instruct"),
-    z.literal("@cf/google/gemma-3-12b-it"),
-    z.literal("@cf/google/gemma-4-26b-a4b-it"),
-    z.literal("@cf/moonshotai/kimi-k2.5"),
-    z.literal("anthropic/claude-3-7-sonnet"),
-    z.literal("anthropic/claude-sonnet-4"),
-    z.literal("anthropic/claude-opus-4"),
-    z.literal("anthropic/claude-3-5-haiku"),
-    z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-    z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-    z.literal("cerebras/llama-3.3-70b"),
-    z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-    z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-    z.literal("cerebras/gpt-oss-120b"),
-    z.literal("google-ai-studio/gemini-2.5-flash"),
-    z.literal("google-ai-studio/gemini-2.5-pro"),
-    z.literal("grok/grok-4"),
-    z.literal("groq/llama-3.3-70b-versatile"),
-    z.literal("groq/llama-3.1-8b-instant"),
-    z.literal("openai/gpt-5"),
-    z.literal("openai/gpt-5-mini"),
-    z.literal("openai/gpt-5-nano"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
+  ai_search_model: z.string().nullable().optional().describe(
+    "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Chat Completions API. ...",
+  ),
   cache: z.boolean().optional().default(true),
   cache_threshold: z.enum([
     "super_strict_match",
@@ -1739,25 +2053,12 @@ const CreateInstanceSchema = z.object({
     data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
     field_name: z.string().min(1).max(64).optional(),
   })).optional(),
-  embedding_model: z.union([
-    z.literal("@cf/qwen/qwen3-embedding-0.6b"),
-    z.literal("@cf/qwen/qwen3-vl-embedding-2b"),
-    z.literal("@cf/baai/bge-m3"),
-    z.literal("@cf/baai/bge-large-en-v1.5"),
-    z.literal("@cf/google/embeddinggemma-300m"),
-    z.literal("google-ai-studio/gemini-embedding-001"),
-    z.literal("google-ai-studio/gemini-embedding-2-preview"),
-    z.literal("google-ai-studio/gemini-embedding-2"),
-    z.literal("openai/text-embedding-3-small"),
-    z.literal("openai/text-embedding-3-large"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  enable: z.boolean().optional().default(true),
-  engine_version: z.number().optional().default(3),
+  embedding_model: z.string().nullable().optional(),
+  enable: z.boolean().optional(),
+  engine_version: z.number().optional(),
   fusion_method: z.enum(["max", "rrf"]).optional().default("rrf"),
-  hybrid_search_enabled: z.boolean().optional().default(false).describe(
-    "Deprecated — use index_method instead.",
+  hybrid_search_enabled: z.boolean().optional().describe(
+    "Deprecated — use index_method instead. Defaults to true for new instances; set false to create a ...",
   ),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
@@ -1767,654 +2068,143 @@ const CreateInstanceSchema = z.object({
   index_method: z.object({
     keyword: z.boolean().optional(),
     vector: z.boolean().optional(),
-  }).optional().default({ "keyword": false, "vector": true }).describe(
-    "Controls which storage backends are used during indexing. Defaults to vector-only.",
-  ),
-  indexing_options: z.object({
-    keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
-      "porter",
-    ),
-  }).nullable().optional(),
-  last_activity: z.string().nullable().optional(),
-  max_num_results: z.number().int().min(1).max(50).optional().default(10),
-  metadata: z.object({
-    created_from_aisearch_wizard: z.boolean().optional(),
-    worker_domain: z.string().optional(),
-  }).optional(),
-  modified_at: z.string().optional(),
-  modified_by: z.string().nullable().optional(),
-  namespace: z.string().regex(
-    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
-  ).nullable().optional(),
-  paused: z.boolean().optional().default(false),
-  public_endpoint_id: z.string().nullable().optional(),
-  public_endpoint_params: z.object({
-    authorized_hosts: z.array(z.string()).optional(),
-    chat_completions_endpoint: z.object({
-      disabled: z.boolean().optional().default(false),
-    }).optional(),
-    custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
-    enabled: z.boolean().optional().default(false),
-    mcp: z.object({
-      description: z.string().optional().default(
-        "Finds exactly what you're looking for",
-      ),
-      disabled: z.boolean().optional().default(false),
-    }).optional(),
-    rate_limit: z.object({
-      period_ms: z.number().int().min(60000).max(3600000).optional(),
-      requests: z.number().int().min(1).optional(),
-      technique: z.enum(["fixed", "sliding"]).optional(),
-    }).optional(),
-    search_endpoint: z.object({
-      disabled: z.boolean().optional().default(false),
-    }).optional(),
-  }).optional(),
-  reranking: z.boolean().optional().default(false),
-  reranking_model: z.union([
-    z.literal("@cf/baai/bge-reranker-base"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  retrieval_options: z.object({
-    boost_by: z.array(z.object({
-      direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
-      field: z.string().min(1).max(64).optional(),
-    })).optional(),
-    keyword_match_mode: z.enum(["and", "or"]).optional(),
-  }).nullable().optional(),
-  rewrite_model: z.union([
-    z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-    z.literal("@cf/zai-org/glm-4.7-flash"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-    z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-    z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-    z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-    z.literal("@cf/moonshotai/kimi-k2-instruct"),
-    z.literal("@cf/google/gemma-3-12b-it"),
-    z.literal("@cf/google/gemma-4-26b-a4b-it"),
-    z.literal("@cf/moonshotai/kimi-k2.5"),
-    z.literal("anthropic/claude-3-7-sonnet"),
-    z.literal("anthropic/claude-sonnet-4"),
-    z.literal("anthropic/claude-opus-4"),
-    z.literal("anthropic/claude-3-5-haiku"),
-    z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-    z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-    z.literal("cerebras/llama-3.3-70b"),
-    z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-    z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-    z.literal("cerebras/gpt-oss-120b"),
-    z.literal("google-ai-studio/gemini-2.5-flash"),
-    z.literal("google-ai-studio/gemini-2.5-pro"),
-    z.literal("grok/grok-4"),
-    z.literal("groq/llama-3.3-70b-versatile"),
-    z.literal("groq/llama-3.1-8b-instant"),
-    z.literal("openai/gpt-5"),
-    z.literal("openai/gpt-5-mini"),
-    z.literal("openai/gpt-5-nano"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  rewrite_query: z.boolean().optional().default(false),
-  score_threshold: z.number().min(0).max(1).optional().default(0.4),
-  source: z.string().nullable().optional(),
-  source_params: z.object({
-    exclude_items: z.array(
-      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
-    ).optional(),
-    include_items: z.array(
-      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
-    ).optional(),
-    prefix: z.string().optional(),
-    r2_jurisdiction: z.string().optional().default("default"),
-    web_crawler: z.object({
-      parse_options: z.object({
-        content_selector: z.array(z.object({
-          path: z.string().min(1).max(200).optional(),
-          selector: z.string().min(1).max(200).optional(),
-        })).optional(),
-        include_headers: z.record(
-          z.string(),
-          z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
-        ).optional(),
-        include_images: z.boolean().optional().default(false),
-        specific_sitemaps: z.array(z.string()).optional(),
-        use_browser_rendering: z.boolean().optional().default(true),
-      }).optional(),
-      parse_type: z.enum(["sitemap", "crawl"]).optional().default("sitemap"),
-    }).optional().default({ "parse_type": "sitemap" }),
-  }).nullable().optional(),
-  status: z.string().optional().default("waiting"),
-  sync_interval: z.union([
-    z.union([z.literal(900)]),
-    z.union([z.literal(1800)]),
-    z.union([z.literal(3600)]),
-    z.union([z.literal(7200)]),
-    z.union([z.literal(14400)]),
-    z.union([z.literal(21600)]),
-    z.union([z.literal(43200)]),
-    z.union([z.literal(86400)]),
-  ]).optional().default(21600).describe(
-    "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
-  ),
-  token_id: z.string().optional(),
-  type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
-    .nullable().optional(),
-}).passthrough();
-
-const GetAiSearchFetchInstanceSchema = z.object({
-  ai_gateway_id: z.string().nullable().optional(),
-  ai_search_model: z.union([
-    z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-    z.literal("@cf/zai-org/glm-4.7-flash"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-    z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-    z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-    z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-    z.literal("@cf/moonshotai/kimi-k2-instruct"),
-    z.literal("@cf/google/gemma-3-12b-it"),
-    z.literal("@cf/google/gemma-4-26b-a4b-it"),
-    z.literal("@cf/moonshotai/kimi-k2.5"),
-    z.literal("anthropic/claude-3-7-sonnet"),
-    z.literal("anthropic/claude-sonnet-4"),
-    z.literal("anthropic/claude-opus-4"),
-    z.literal("anthropic/claude-3-5-haiku"),
-    z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-    z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-    z.literal("cerebras/llama-3.3-70b"),
-    z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-    z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-    z.literal("cerebras/gpt-oss-120b"),
-    z.literal("google-ai-studio/gemini-2.5-flash"),
-    z.literal("google-ai-studio/gemini-2.5-pro"),
-    z.literal("grok/grok-4"),
-    z.literal("groq/llama-3.3-70b-versatile"),
-    z.literal("groq/llama-3.1-8b-instant"),
-    z.literal("openai/gpt-5"),
-    z.literal("openai/gpt-5-mini"),
-    z.literal("openai/gpt-5-nano"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  cache: z.boolean().optional().default(true),
-  cache_threshold: z.enum([
-    "super_strict_match",
-    "close_enough",
-    "flexible_friend",
-    "anything_goes",
-  ]).optional().default("close_enough"),
-  cache_ttl: z.union([
-    z.union([z.literal(600)]),
-    z.union([z.literal(1800)]),
-    z.union([z.literal(3600)]),
-    z.union([z.literal(7200)]),
-    z.union([z.literal(21600)]),
-    z.union([z.literal(43200)]),
-    z.union([z.literal(86400)]),
-    z.union([z.literal(172800)]),
-    z.union([z.literal(259200)]),
-    z.union([z.literal(518400)]),
-  ]).optional().default(172800).describe(
-    "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (1h), 7200 (2h), 2160...",
-  ),
-  chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
-  chunk_size: z.number().int().min(64).optional(),
-  created_at: z.string().optional(),
-  created_by: z.string().nullable().optional(),
-  custom_metadata: z.array(z.object({
-    data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
-    field_name: z.string().min(1).max(64).optional(),
-  })).optional(),
-  embedding_model: z.union([
-    z.literal("@cf/qwen/qwen3-embedding-0.6b"),
-    z.literal("@cf/qwen/qwen3-vl-embedding-2b"),
-    z.literal("@cf/baai/bge-m3"),
-    z.literal("@cf/baai/bge-large-en-v1.5"),
-    z.literal("@cf/google/embeddinggemma-300m"),
-    z.literal("google-ai-studio/gemini-embedding-001"),
-    z.literal("google-ai-studio/gemini-embedding-2-preview"),
-    z.literal("google-ai-studio/gemini-embedding-2"),
-    z.literal("openai/text-embedding-3-small"),
-    z.literal("openai/text-embedding-3-large"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  enable: z.boolean().optional().default(true),
-  engine_version: z.number().optional().default(3),
-  fusion_method: z.enum(["max", "rrf"]).optional().default("rrf"),
-  hybrid_search_enabled: z.boolean().optional().default(false).describe(
-    "Deprecated — use index_method instead.",
-  ),
-  id: z.string().min(1).max(64).regex(
-    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe(
-    "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-  ),
-  index_method: z.object({
-    keyword: z.boolean().optional(),
-    vector: z.boolean().optional(),
-  }).optional().default({ "keyword": false, "vector": true }).describe(
-    "Controls which storage backends are used during indexing. Defaults to vector-only.",
-  ),
-  indexing_options: z.object({
-    keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
-      "porter",
-    ),
-  }).nullable().optional(),
-  last_activity: z.string().nullable().optional(),
-  max_num_results: z.number().int().min(1).max(50).optional().default(10),
-  metadata: z.object({
-    created_from_aisearch_wizard: z.boolean().optional(),
-    worker_domain: z.string().optional(),
-  }).optional(),
-  modified_at: z.string().optional(),
-  modified_by: z.string().nullable().optional(),
-  namespace: z.string().regex(
-    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
-  ).nullable().optional(),
-  paused: z.boolean().optional().default(false),
-  public_endpoint_id: z.string().nullable().optional(),
-  public_endpoint_params: z.object({
-    authorized_hosts: z.array(z.string()).optional(),
-    chat_completions_endpoint: z.object({
-      disabled: z.boolean().optional().default(false),
-    }).optional(),
-    custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
-    enabled: z.boolean().optional().default(false),
-    mcp: z.object({
-      description: z.string().optional().default(
-        "Finds exactly what you're looking for",
-      ),
-      disabled: z.boolean().optional().default(false),
-    }).optional(),
-    rate_limit: z.object({
-      period_ms: z.number().int().min(60000).max(3600000).optional(),
-      requests: z.number().int().min(1).optional(),
-      technique: z.enum(["fixed", "sliding"]).optional(),
-    }).optional(),
-    search_endpoint: z.object({
-      disabled: z.boolean().optional().default(false),
-    }).optional(),
-  }).optional(),
-  reranking: z.boolean().optional().default(false),
-  reranking_model: z.union([
-    z.literal("@cf/baai/bge-reranker-base"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  retrieval_options: z.object({
-    boost_by: z.array(z.object({
-      direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
-      field: z.string().min(1).max(64).optional(),
-    })).optional(),
-    keyword_match_mode: z.enum(["and", "or"]).optional(),
-  }).nullable().optional(),
-  rewrite_model: z.union([
-    z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-    z.literal("@cf/zai-org/glm-4.7-flash"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-    z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-    z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-    z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-    z.literal("@cf/moonshotai/kimi-k2-instruct"),
-    z.literal("@cf/google/gemma-3-12b-it"),
-    z.literal("@cf/google/gemma-4-26b-a4b-it"),
-    z.literal("@cf/moonshotai/kimi-k2.5"),
-    z.literal("anthropic/claude-3-7-sonnet"),
-    z.literal("anthropic/claude-sonnet-4"),
-    z.literal("anthropic/claude-opus-4"),
-    z.literal("anthropic/claude-3-5-haiku"),
-    z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-    z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-    z.literal("cerebras/llama-3.3-70b"),
-    z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-    z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-    z.literal("cerebras/gpt-oss-120b"),
-    z.literal("google-ai-studio/gemini-2.5-flash"),
-    z.literal("google-ai-studio/gemini-2.5-pro"),
-    z.literal("grok/grok-4"),
-    z.literal("groq/llama-3.3-70b-versatile"),
-    z.literal("groq/llama-3.1-8b-instant"),
-    z.literal("openai/gpt-5"),
-    z.literal("openai/gpt-5-mini"),
-    z.literal("openai/gpt-5-nano"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  rewrite_query: z.boolean().optional().default(false),
-  score_threshold: z.number().min(0).max(1).optional().default(0.4),
-  source: z.string().nullable().optional(),
-  source_params: z.object({
-    exclude_items: z.array(
-      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
-    ).optional(),
-    include_items: z.array(
-      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
-    ).optional(),
-    prefix: z.string().optional(),
-    r2_jurisdiction: z.string().optional().default("default"),
-    web_crawler: z.object({
-      parse_options: z.object({
-        content_selector: z.array(z.object({
-          path: z.string().min(1).max(200).optional(),
-          selector: z.string().min(1).max(200).optional(),
-        })).optional(),
-        include_headers: z.record(
-          z.string(),
-          z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
-        ).optional(),
-        include_images: z.boolean().optional().default(false),
-        specific_sitemaps: z.array(z.string()).optional(),
-        use_browser_rendering: z.boolean().optional().default(true),
-      }).optional(),
-      parse_type: z.enum(["sitemap", "crawl"]).optional().default("sitemap"),
-    }).optional().default({ "parse_type": "sitemap" }),
-  }).nullable().optional(),
-  status: z.string().optional().default("waiting"),
-  sync_interval: z.union([
-    z.union([z.literal(900)]),
-    z.union([z.literal(1800)]),
-    z.union([z.literal(3600)]),
-    z.union([z.literal(7200)]),
-    z.union([z.literal(14400)]),
-    z.union([z.literal(21600)]),
-    z.union([z.literal(43200)]),
-    z.union([z.literal(86400)]),
-  ]).optional().default(21600).describe(
-    "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
-  ),
-  token_id: z.string().optional(),
-  type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
-    .nullable().optional(),
-}).passthrough();
-
-const CreateAiSearchInstanceChatCompletionSchema = z.object({
-  choices: z.array(z.object({
-    index: z.number().int().optional(),
-    message: z.object({
-      content: z.union([
-        z.string(),
-        z.array(z.union([
-          z.object({
-            text: z.unknown().optional(),
-            type: z.unknown().optional(),
-          }),
-          z.object({
-            image_url: z.unknown().optional(),
-            type: z.unknown().optional(),
-          }),
-        ])),
-        z.unknown().nullable(),
-      ]).optional(),
-      role: z.enum(["system", "developer", "user", "assistant", "tool"])
-        .optional(),
-    }).optional(),
-  })).optional(),
-  chunks: z.array(z.object({
-    id: z.string().optional(),
-    item: z.object({
-      key: z.string().optional(),
-      metadata: z.record(z.string(), z.unknown()).optional(),
-      timestamp: z.number().optional(),
-    }).optional(),
-    score: z.number().min(0).max(1).optional(),
-    scoring_details: z.object({
-      fusion_method: z.enum(["rrf", "max"]).optional(),
-      keyword_rank: z.number().optional(),
-      keyword_score: z.number().min(0).optional(),
-      reranking_score: z.number().min(0).max(1).optional(),
-      vector_rank: z.number().optional(),
-      vector_score: z.number().min(0).max(1).optional(),
-    }).optional(),
-    text: z.string().optional(),
-    type: z.string().optional(),
-  })).optional(),
-  id: z.string().optional(),
-  model: z.string().optional(),
-  object: z.string().optional(),
-}).passthrough();
-
-const JobsItemSchema = z.object({
-  description: z.string().optional(),
-  end_reason: z.string().optional(),
-  ended_at: z.string().optional(),
-  id: z.string().optional(),
-  last_seen_at: z.string().optional(),
-  source: z.enum(["user", "schedule"]).optional(),
-  started_at: z.string().optional(),
-}).passthrough();
-
-const ListJobsSchema = z.object({
-  items: z.array(JobsItemSchema),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
-
-const CreateJobSchema = z.object({
-  description: z.string().optional(),
-  end_reason: z.string().optional(),
-  ended_at: z.string().optional(),
-  id: z.string().optional(),
-  last_seen_at: z.string().optional(),
-  source: z.enum(["user", "schedule"]).optional(),
-  started_at: z.string().optional(),
-}).passthrough();
-
-const UpdateAiSearchInstanceChangeJobStatusSchema = z.object({
-  description: z.string().optional(),
-  end_reason: z.string().optional(),
-  ended_at: z.string().optional(),
-  id: z.string().optional(),
-  last_seen_at: z.string().optional(),
-  source: z.enum(["user", "schedule"]).optional(),
-  started_at: z.string().optional(),
-}).passthrough();
-
-const JobLogsItemSchema = z.object({
-  created_at: z.number().optional(),
-  id: z.number().int().optional(),
-  message: z.string().optional(),
-  message_type: z.number().int().optional(),
-}).passthrough();
-
-const ListJobLogsSchema = z.object({
-  items: z.array(JobLogsItemSchema),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
-
-const CreateAiSearchInstanceSearchSchema = z.object({
-  chunks: z.array(z.object({
-    id: z.string().optional(),
-    item: z.object({
-      key: z.string().optional(),
-      metadata: z.record(z.string(), z.unknown()).optional(),
-      timestamp: z.number().optional(),
-    }).optional(),
-    score: z.number().min(0).max(1).optional(),
-    scoring_details: z.object({
-      fusion_method: z.enum(["rrf", "max"]).optional(),
-      keyword_rank: z.number().optional(),
-      keyword_score: z.number().min(0).optional(),
-      reranking_score: z.number().min(0).max(1).optional(),
-      vector_rank: z.number().optional(),
-      vector_score: z.number().min(0).max(1).optional(),
-    }).optional(),
-    text: z.string().optional(),
-    type: z.string().optional(),
-  })).optional(),
-  query_kind: z.enum(["text", "image", "multimodal"]).optional(),
-  search_query: z.string().optional(),
-}).passthrough();
-
-const GetAiSearchStatsSchema = z.object({
-  completed: z.number().int().optional(),
-  degraded: z.boolean().optional().describe(
-    "True when status counts are unavailable (e.g. legacy stats query exceeded D1 statement-size limit...",
-  ),
-  engine: z.object({
-    r2: z.object({
-      metadataSizeBytes: z.number().int().optional(),
-      objectCount: z.number().int().optional(),
-      payloadSizeBytes: z.number().int().optional(),
-    }).optional(),
-    vectorize: z.object({
-      dimensions: z.number().int().optional(),
-      vectorsCount: z.number().int().optional(),
-    }).optional(),
   }).optional().describe(
-    "Engine-specific metadata. Present only for managed (v3) instances.",
+    "Controls which storage backends indexing uses. Defaults to vector and keyword indexing for new in...",
   ),
-  error: z.number().int().optional(),
-  file_embed_errors: z.record(z.string(), z.unknown()).optional(),
-  index_source_errors: z.record(z.string(), z.unknown()).optional(),
-  last_activity: z.string().optional(),
-  outdated: z.number().int().optional(),
-  queued: z.number().int().optional(),
-  running: z.number().int().optional(),
-  skipped: z.number().int().optional(),
-}).passthrough();
-
-const NamespacesItemSchema = z.object({
-  created_at: z.string().optional(),
-  description: z.string().max(256).nullable().optional().describe(
-    "Optional description for the namespace. Max 256 characters.",
-  ),
-  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
-    .optional(),
-}).passthrough();
-
-const ListNamespacesSchema = z.object({
-  items: z.array(NamespacesItemSchema),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
-
-const CreateNamespaceSchema = z.object({
-  created_at: z.string().optional(),
-  description: z.string().max(256).nullable().optional().describe(
-    "Optional description for the namespace. Max 256 characters.",
-  ),
-  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
-    .optional(),
-}).passthrough();
-
-const GetAiSearchFetchNamespaceSchema = z.object({
-  created_at: z.string().optional(),
-  description: z.string().max(256).nullable().optional().describe(
-    "Optional description for the namespace. Max 256 characters.",
-  ),
-  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
-    .optional(),
-}).passthrough();
-
-const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
-  choices: z.array(z.object({
-    index: z.number().int().optional(),
-    message: z.object({
-      content: z.union([
-        z.string(),
-        z.array(z.union([
-          z.object({
-            text: z.unknown().optional(),
-            type: z.unknown().optional(),
-          }),
-          z.object({
-            image_url: z.unknown().optional(),
-            type: z.unknown().optional(),
-          }),
-        ])),
-        z.unknown().nullable(),
-      ]).optional(),
-      role: z.enum(["system", "developer", "user", "assistant", "tool"])
-        .optional(),
+  indexing_options: z.object({
+    file_summary: z.boolean().optional().default(false),
+    keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+      "porter",
+    ),
+    use_ocr: z.boolean().optional().default(false),
+  }).nullable().optional(),
+  last_activity: z.string().nullable().optional(),
+  max_num_results: z.number().int().min(1).max(50).optional().default(10),
+  metadata: z.object({
+    created_from_aisearch_wizard: z.boolean().optional(),
+    created_from_emdash_plugin: z.object({
+      type: z.enum(["native", "rest"]).optional(),
+      version: z.string().optional(),
     }).optional(),
-  })).optional(),
-  chunks: z.array(z.object({
-    id: z.string().optional(),
-    instance_id: z.string().optional(),
-    item: z.object({
-      key: z.string().optional(),
-      metadata: z.record(z.string(), z.unknown()).optional(),
-      timestamp: z.number().optional(),
+    worker_domain: z.string().optional(),
+  }).optional(),
+  modified_at: z.string().optional(),
+  modified_by: z.string().nullable().optional(),
+  namespace: z.string().regex(
+    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+  ).nullable().optional(),
+  paused: z.boolean().optional(),
+  public_endpoint_id: z.string().nullable().optional(),
+  public_endpoint_params: z.object({
+    authorized_hosts: z.array(z.string()).optional(),
+    chat_completions_endpoint: z.object({
+      disabled: z.boolean().optional().default(false),
     }).optional(),
-    score: z.number().min(0).max(1).optional(),
-    scoring_details: z.object({
-      fusion_method: z.enum(["rrf", "max"]).optional(),
-      keyword_rank: z.number().optional(),
-      keyword_score: z.number().min(0).optional(),
-      reranking_score: z.number().min(0).max(1).optional(),
-      vector_rank: z.number().optional(),
-      vector_score: z.number().min(0).max(1).optional(),
+    custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
+    default_domain_enabled: z.boolean().optional().default(true),
+    enabled: z.boolean().optional().default(false),
+    mcp: z.object({
+      description: z.string().optional().default(
+        "Finds exactly what you're looking for",
+      ),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
-    text: z.string().optional(),
-    type: z.string().optional(),
-  })).optional(),
-  errors: z.array(z.object({
-    instance_id: z.string().optional(),
-    message: z.string().optional(),
-  })).optional(),
-  id: z.string().optional(),
-  model: z.string().optional(),
-  object: z.string().optional(),
+    rate_limit: z.object({
+      period_ms: z.number().int().min(60000).max(3600000).optional(),
+      requests: z.number().int().min(1).optional(),
+      technique: z.enum(["fixed", "sliding"]).optional(),
+    }).optional(),
+    search_endpoint: z.object({
+      disabled: z.boolean().optional().default(false),
+    }).optional(),
+  }).optional(),
+  reranking: z.boolean().optional().default(false),
+  reranking_model: z.string().nullable().optional(),
+  retrieval_options: z.object({
+    boost_by: z.array(z.object({
+      direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
+      field: z.string().min(1).max(64).optional(),
+    })).optional(),
+    keyword_match_mode: z.enum(["and", "or"]).optional(),
+  }).nullable().optional(),
+  rewrite_model: z.string().nullable().optional().describe(
+    "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Chat Completions API. ...",
+  ),
+  rewrite_query: z.boolean().optional().default(false),
+  score_threshold: z.number().min(0).max(1).optional().describe(
+    "Minimum similarity score a chunk must reach to be returned. Defaults to 0.4.",
+  ),
+  source: z.string().nullable().optional().describe(
+    "The R2 bucket name for r2, the website URL for web-crawler, or the D1 database ID (UUID) for d1. ...",
+  ),
+  source_params: z.object({
+    d1: z.object({
+      query: z.string().min(1).max(10000).optional(),
+      template: z.enum(["labelled", "content_only", "key_value", "json"])
+        .optional().default("labelled"),
+    }).optional(),
+    exclude_items: z.array(
+      z.string().max(500).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
+    include_items: z.array(
+      z.string().max(500).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
+    prefix: z.string().optional(),
+    r2_jurisdiction: z.string().optional().default("default"),
+    web_crawler: z.object({
+      discover_options: z.object({
+        depth: z.number().min(1).max(100000).optional().default(5),
+        include_external_links: z.boolean().optional().default(false),
+        include_subdomains: z.boolean().optional().default(false),
+        limit: z.number().min(1).max(100000).optional().default(100000),
+        max_age: z.number().min(0).max(604800).optional().default(86400),
+        source: z.enum(["all", "sitemaps", "links"]).optional().default("all"),
+      }).optional(),
+      parse_options: z.object({
+        content_selector: z.array(z.object({
+          path: z.string().min(1).max(200).optional(),
+          selector: z.string().min(1).max(200).optional(),
+        })).optional(),
+        include_headers: z.record(
+          z.string(),
+          z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+        ).optional(),
+        include_images: z.boolean().optional().default(false),
+        specific_sitemaps: z.array(z.string()).optional(),
+        use_browser_rendering: z.boolean().optional().default(true),
+      }).optional(),
+      parse_type: z.enum(["sitemap", "discover"]).optional().default("sitemap"),
+    }).optional().default({ "parse_type": "sitemap" }),
+  }).nullable().optional(),
+  status: z.string().optional(),
+  sync_interval: z.union([
+    z.union([z.literal(900)]),
+    z.union([z.literal(1800)]),
+    z.union([z.literal(3600)]),
+    z.union([z.literal(7200)]),
+    z.union([z.literal(14400)]),
+    z.union([z.literal(21600)]),
+    z.union([z.literal(43200)]),
+    z.union([z.literal(86400)]),
+  ]).optional().describe(
+    "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
+  ),
+  token_id: z.string().optional(),
+  type: z.union([
+    z.literal("r2"),
+    z.literal("web-crawler"),
+    z.literal("d1"),
+    z.literal(null),
+  ]).nullable().optional().describe(
+    "Source type. When omitted or null with a non-blank source, HTTP(S) URLs infer web-crawler and exi...",
+  ),
 }).passthrough();
 
 const GetAiSearchNamespaceFetchInstanceSchema = z.object({
   ai_gateway_id: z.string().nullable().optional(),
-  ai_search_model: z.union([
-    z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-    z.literal("@cf/zai-org/glm-4.7-flash"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-    z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-    z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-    z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-    z.literal("@cf/moonshotai/kimi-k2-instruct"),
-    z.literal("@cf/google/gemma-3-12b-it"),
-    z.literal("@cf/google/gemma-4-26b-a4b-it"),
-    z.literal("@cf/moonshotai/kimi-k2.5"),
-    z.literal("anthropic/claude-3-7-sonnet"),
-    z.literal("anthropic/claude-sonnet-4"),
-    z.literal("anthropic/claude-opus-4"),
-    z.literal("anthropic/claude-3-5-haiku"),
-    z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-    z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-    z.literal("cerebras/llama-3.3-70b"),
-    z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-    z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-    z.literal("cerebras/gpt-oss-120b"),
-    z.literal("google-ai-studio/gemini-2.5-flash"),
-    z.literal("google-ai-studio/gemini-2.5-pro"),
-    z.literal("grok/grok-4"),
-    z.literal("groq/llama-3.3-70b-versatile"),
-    z.literal("groq/llama-3.1-8b-instant"),
-    z.literal("openai/gpt-5"),
-    z.literal("openai/gpt-5-mini"),
-    z.literal("openai/gpt-5-nano"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
+  ai_search_model: z.string().nullable().optional().describe(
+    "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Chat Completions API. ...",
+  ),
   cache: z.boolean().optional().default(true),
   cache_threshold: z.enum([
     "super_strict_match",
@@ -2444,25 +2234,12 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
     field_name: z.string().min(1).max(64).optional(),
   })).optional(),
-  embedding_model: z.union([
-    z.literal("@cf/qwen/qwen3-embedding-0.6b"),
-    z.literal("@cf/qwen/qwen3-vl-embedding-2b"),
-    z.literal("@cf/baai/bge-m3"),
-    z.literal("@cf/baai/bge-large-en-v1.5"),
-    z.literal("@cf/google/embeddinggemma-300m"),
-    z.literal("google-ai-studio/gemini-embedding-001"),
-    z.literal("google-ai-studio/gemini-embedding-2-preview"),
-    z.literal("google-ai-studio/gemini-embedding-2"),
-    z.literal("openai/text-embedding-3-small"),
-    z.literal("openai/text-embedding-3-large"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
-  enable: z.boolean().optional().default(true),
-  engine_version: z.number().optional().default(3),
+  embedding_model: z.string().nullable().optional(),
+  enable: z.boolean().optional(),
+  engine_version: z.number().optional(),
   fusion_method: z.enum(["max", "rrf"]).optional().default("rrf"),
-  hybrid_search_enabled: z.boolean().optional().default(false).describe(
-    "Deprecated — use index_method instead.",
+  hybrid_search_enabled: z.boolean().optional().describe(
+    "Deprecated — use index_method instead. Defaults to true for new instances; set false to create a ...",
   ),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
@@ -2472,18 +2249,24 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
   index_method: z.object({
     keyword: z.boolean().optional(),
     vector: z.boolean().optional(),
-  }).optional().default({ "keyword": false, "vector": true }).describe(
-    "Controls which storage backends are used during indexing. Defaults to vector-only.",
+  }).optional().describe(
+    "Controls which storage backends indexing uses. Defaults to vector and keyword indexing for new in...",
   ),
   indexing_options: z.object({
+    file_summary: z.boolean().optional().default(false),
     keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
       "porter",
     ),
+    use_ocr: z.boolean().optional().default(false),
   }).nullable().optional(),
   last_activity: z.string().nullable().optional(),
   max_num_results: z.number().int().min(1).max(50).optional().default(10),
   metadata: z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
+    created_from_emdash_plugin: z.object({
+      type: z.enum(["native", "rest"]).optional(),
+      version: z.string().optional(),
+    }).optional(),
     worker_domain: z.string().optional(),
   }).optional(),
   modified_at: z.string().optional(),
@@ -2491,7 +2274,7 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
   namespace: z.string().regex(
     new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
   ).nullable().optional(),
-  paused: z.boolean().optional().default(false),
+  paused: z.boolean().optional(),
   public_endpoint_id: z.string().nullable().optional(),
   public_endpoint_params: z.object({
     authorized_hosts: z.array(z.string()).optional(),
@@ -2499,6 +2282,7 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
       disabled: z.boolean().optional().default(false),
     }).optional(),
     custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
+    default_domain_enabled: z.boolean().optional().default(true),
     enabled: z.boolean().optional().default(false),
     mcp: z.object({
       description: z.string().optional().default(
@@ -2516,11 +2300,7 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     }).optional(),
   }).optional(),
   reranking: z.boolean().optional().default(false),
-  reranking_model: z.union([
-    z.literal("@cf/baai/bge-reranker-base"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
+  reranking_model: z.string().nullable().optional(),
   retrieval_options: z.object({
     boost_by: z.array(z.object({
       direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
@@ -2528,52 +2308,39 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     })).optional(),
     keyword_match_mode: z.enum(["and", "or"]).optional(),
   }).nullable().optional(),
-  rewrite_model: z.union([
-    z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-    z.literal("@cf/zai-org/glm-4.7-flash"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-    z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-    z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-    z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-    z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-    z.literal("@cf/moonshotai/kimi-k2-instruct"),
-    z.literal("@cf/google/gemma-3-12b-it"),
-    z.literal("@cf/google/gemma-4-26b-a4b-it"),
-    z.literal("@cf/moonshotai/kimi-k2.5"),
-    z.literal("anthropic/claude-3-7-sonnet"),
-    z.literal("anthropic/claude-sonnet-4"),
-    z.literal("anthropic/claude-opus-4"),
-    z.literal("anthropic/claude-3-5-haiku"),
-    z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-    z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-    z.literal("cerebras/llama-3.3-70b"),
-    z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-    z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-    z.literal("cerebras/gpt-oss-120b"),
-    z.literal("google-ai-studio/gemini-2.5-flash"),
-    z.literal("google-ai-studio/gemini-2.5-pro"),
-    z.literal("grok/grok-4"),
-    z.literal("groq/llama-3.3-70b-versatile"),
-    z.literal("groq/llama-3.1-8b-instant"),
-    z.literal("openai/gpt-5"),
-    z.literal("openai/gpt-5-mini"),
-    z.literal("openai/gpt-5-nano"),
-    z.literal(""),
-    z.literal(null),
-  ]).nullable().optional(),
+  rewrite_model: z.string().nullable().optional().describe(
+    "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Chat Completions API. ...",
+  ),
   rewrite_query: z.boolean().optional().default(false),
-  score_threshold: z.number().min(0).max(1).optional().default(0.4),
-  source: z.string().nullable().optional(),
+  score_threshold: z.number().min(0).max(1).optional().describe(
+    "Minimum similarity score a chunk must reach to be returned. Defaults to 0.4.",
+  ),
+  source: z.string().nullable().optional().describe(
+    "The R2 bucket name for r2, the website URL for web-crawler, or the D1 database ID (UUID) for d1. ...",
+  ),
   source_params: z.object({
+    d1: z.object({
+      query: z.string().min(1).max(10000).optional(),
+      template: z.enum(["labelled", "content_only", "key_value", "json"])
+        .optional().default("labelled"),
+    }).optional(),
     exclude_items: z.array(
-      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+      z.string().max(500).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
     ).optional(),
     include_items: z.array(
-      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+      z.string().max(500).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
     ).optional(),
     prefix: z.string().optional(),
     r2_jurisdiction: z.string().optional().default("default"),
     web_crawler: z.object({
+      discover_options: z.object({
+        depth: z.number().min(1).max(100000).optional().default(5),
+        include_external_links: z.boolean().optional().default(false),
+        include_subdomains: z.boolean().optional().default(false),
+        limit: z.number().min(1).max(100000).optional().default(100000),
+        max_age: z.number().min(0).max(604800).optional().default(86400),
+        source: z.enum(["all", "sitemaps", "links"]).optional().default("all"),
+      }).optional(),
       parse_options: z.object({
         content_selector: z.array(z.object({
           path: z.string().min(1).max(200).optional(),
@@ -2587,10 +2354,10 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
         specific_sitemaps: z.array(z.string()).optional(),
         use_browser_rendering: z.boolean().optional().default(true),
       }).optional(),
-      parse_type: z.enum(["sitemap", "crawl"]).optional().default("sitemap"),
+      parse_type: z.enum(["sitemap", "discover"]).optional().default("sitemap"),
     }).optional().default({ "parse_type": "sitemap" }),
   }).nullable().optional(),
-  status: z.string().optional().default("waiting"),
+  status: z.string().optional(),
   sync_interval: z.union([
     z.union([z.literal(900)]),
     z.union([z.literal(1800)]),
@@ -2600,12 +2367,18 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     z.union([z.literal(21600)]),
     z.union([z.literal(43200)]),
     z.union([z.literal(86400)]),
-  ]).optional().default(21600).describe(
+  ]).optional().describe(
     "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
   ),
   token_id: z.string().optional(),
-  type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
-    .nullable().optional(),
+  type: z.union([
+    z.literal("r2"),
+    z.literal("web-crawler"),
+    z.literal("d1"),
+    z.literal(null),
+  ]).nullable().optional().describe(
+    "Source type. When omitted or null with a non-blank source, HTTP(S) URLs infer web-crawler and exi...",
+  ),
 }).passthrough();
 
 const UpdateAiSearchMoveInstanceSchema = z.object({}).passthrough();
@@ -2625,8 +2398,12 @@ const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
             image_url: z.unknown().optional(),
             type: z.unknown().optional(),
           }),
+          z.object({
+            file: z.unknown().optional(),
+            type: z.unknown().optional(),
+          }),
         ])),
-        z.unknown().nullable(),
+        z.union([z.literal(null)]).nullable(),
       ]).optional(),
       role: z.enum(["system", "developer", "user", "assistant", "tool"])
         .optional(),
@@ -2639,6 +2416,8 @@ const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
+    media_end_ms: z.number().int().min(0).optional(),
+    media_start_ms: z.number().int().min(0).optional(),
     score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
@@ -2648,6 +2427,7 @@ const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
+    source_media_type: z.enum(["audio", "video"]).optional(),
     text: z.string().optional(),
     type: z.string().optional(),
   })).optional(),
@@ -2665,6 +2445,10 @@ const ItemsItemSchema = z.object({
   id: z.string().optional(),
   key: z.string().optional(),
   last_seen_at: z.string().optional(),
+  metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .nullable().optional().describe(
+      "Built-in, configured filterable, and retained source metadata for the item.",
+    ),
   namespace: z.string().optional(),
   next_action: z.union([
     z.literal("INDEX"),
@@ -2705,6 +2489,10 @@ const CreateOrUpdateItemSchema = z.object({
   id: z.string().optional(),
   key: z.string().optional(),
   last_seen_at: z.string().optional(),
+  metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .nullable().optional().describe(
+      "Built-in, configured filterable, and retained source metadata for the item.",
+    ),
   namespace: z.string().optional(),
   next_action: z.union([
     z.literal("INDEX"),
@@ -2733,6 +2521,10 @@ const GetItemSchema = z.object({
   id: z.string().optional(),
   key: z.string().optional(),
   last_seen_at: z.string().optional(),
+  metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .nullable().optional().describe(
+      "Built-in, configured filterable, and retained source metadata for the item.",
+    ),
   namespace: z.string().optional(),
   next_action: z.union([
     z.literal("INDEX"),
@@ -2761,6 +2553,10 @@ const UpdateAiSearchNamespaceInstanceSyncItemSchema = z.object({
   id: z.string().optional(),
   key: z.string().optional(),
   last_seen_at: z.string().optional(),
+  metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .nullable().optional().describe(
+      "Built-in, configured filterable, and retained source metadata for the item.",
+    ),
   namespace: z.string().optional(),
   next_action: z.union([
     z.literal("INDEX"),
@@ -2788,6 +2584,15 @@ const ItemChunksItemSchema = z.object({
     metadata: z.record(z.string(), z.unknown()).optional(),
     timestamp: z.number().optional(),
   }).optional(),
+  media_end_ms: z.number().int().min(0).optional().describe(
+    "Audio/video transcript chunks only: end, in milliseconds from the start of the media (whole secon...",
+  ),
+  media_start_ms: z.number().int().min(0).optional().describe(
+    "Audio/video transcript chunks only: start, in milliseconds from the start of the media (whole sec...",
+  ),
+  source_media_type: z.enum(["audio", "video"]).optional().describe(
+    "Audio/video transcript chunks only: type of the source media file. Omitted for all other chunks.",
+  ),
   start_byte: z.number().optional(),
   text: z.string().optional(),
 }).passthrough();
@@ -2826,6 +2631,38 @@ const ListAiSearchNamespaceInstanceLogsItemSchema = z.object({
   ),
 });
 
+const JobsItemSchema = z.object({
+  description: z.string().optional(),
+  end_reason: z.string().optional(),
+  ended_at: z.string().optional(),
+  id: z.string().optional(),
+  last_seen_at: z.string().optional(),
+  source: z.enum(["user", "schedule"]).optional(),
+  started_at: z.string().optional(),
+}).passthrough();
+
+const ListJobsSchema = z.object({
+  items: z.array(JobsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CreateJobSchema = z.object({
+  description: z.string().optional(),
+  end_reason: z.string().optional(),
+  ended_at: z.string().optional(),
+  id: z.string().optional(),
+  last_seen_at: z.string().optional(),
+  source: z.enum(["user", "schedule"]).optional(),
+  started_at: z.string().optional(),
+}).passthrough();
+
 const UpdateAiSearchNamespaceInstanceChangeJobStatusSchema = z.object({
   description: z.string().optional(),
   end_reason: z.string().optional(),
@@ -2836,6 +2673,29 @@ const UpdateAiSearchNamespaceInstanceChangeJobStatusSchema = z.object({
   started_at: z.string().optional(),
 }).passthrough();
 
+const JobLogsItemSchema = z.object({
+  created_at: z.number().optional(),
+  id: z.number().int().optional(),
+  message: z.string().optional(),
+  message_type: z.number().int().optional(),
+}).passthrough();
+
+const ListJobLogsSchema = z.object({
+  items: z.array(JobLogsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const AiSearchNamespacePurgeInstanceCacheSchema = z.object({
+  success: z.boolean().optional(),
+}).passthrough();
+
 const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
   chunks: z.array(z.object({
     id: z.string().optional(),
@@ -2844,6 +2704,8 @@ const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
+    media_end_ms: z.number().int().min(0).optional(),
+    media_start_ms: z.number().int().min(0).optional(),
     score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
@@ -2853,6 +2715,7 @@ const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
+    source_media_type: z.enum(["audio", "video"]).optional(),
     text: z.string().optional(),
     type: z.string().optional(),
   })).optional(),
@@ -2863,7 +2726,7 @@ const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
 const GetAiSearchNamespaceStatsSchema = z.object({
   completed: z.number().int().optional(),
   degraded: z.boolean().optional().describe(
-    "True when status counts are unavailable (e.g. legacy stats query exceeded D1 statement-size limit...",
+    "True when the API cannot compute status counts (e.g. the legacy stats query exceeded the D1 state...",
   ),
   engine: z.object({
     r2: z.object({
@@ -2888,7 +2751,70 @@ const GetAiSearchNamespaceStatsSchema = z.object({
   skipped: z.number().int().optional(),
 }).passthrough();
 
-const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
+const GetAiSearchFetchNamespaceSchema = z.object({
+  created_at: z.string().nullable().optional(),
+  description: z.string().max(256).nullable().optional().describe(
+    "Optional description for the namespace. Max 256 characters.",
+  ),
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
+    .optional(),
+  public_endpoint_id: z.string().nullable().optional(),
+  public_endpoint_params: z.object({
+    authorized_hosts: z.array(z.string()).optional(),
+    chat_completions_endpoint: z.object({
+      disabled: z.boolean().optional().default(false),
+    }).optional(),
+    custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
+    default_domain_enabled: z.boolean().optional().default(true),
+    enabled: z.boolean().optional().default(false),
+    instances_allowed: z.array(
+      z.string().min(1).max(64).regex(
+        new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+      ),
+    ).optional().default([]),
+    mcp: z.object({
+      description: z.string().optional().default(
+        "Finds exactly what you're looking for",
+      ),
+      disabled: z.boolean().optional().default(false),
+    }).optional(),
+    rate_limit: z.object({
+      period_ms: z.number().int().min(60000).max(3600000).optional(),
+      requests: z.number().int().min(1).optional(),
+      technique: z.enum(["fixed", "sliding"]).optional(),
+    }).optional(),
+    search_endpoint: z.object({
+      disabled: z.boolean().optional().default(false),
+    }).optional(),
+  }).nullable().optional(),
+}).passthrough();
+
+const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
+  choices: z.array(z.object({
+    index: z.number().int().optional(),
+    message: z.object({
+      content: z.union([
+        z.string(),
+        z.array(z.union([
+          z.object({
+            text: z.unknown().optional(),
+            type: z.unknown().optional(),
+          }),
+          z.object({
+            image_url: z.unknown().optional(),
+            type: z.unknown().optional(),
+          }),
+          z.object({
+            file: z.unknown().optional(),
+            type: z.unknown().optional(),
+          }),
+        ])),
+        z.union([z.literal(null)]).nullable(),
+      ]).optional(),
+      role: z.enum(["system", "developer", "user", "assistant", "tool"])
+        .optional(),
+    }).optional(),
+  })).optional(),
   chunks: z.array(z.object({
     id: z.string().optional(),
     instance_id: z.string().optional(),
@@ -2897,6 +2823,8 @@ const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
+    media_end_ms: z.number().int().min(0).optional(),
+    media_start_ms: z.number().int().min(0).optional(),
     score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
@@ -2906,6 +2834,40 @@ const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
+    source_media_type: z.enum(["audio", "video"]).optional(),
+    text: z.string().optional(),
+    type: z.string().optional(),
+  })).optional(),
+  errors: z.array(z.object({
+    instance_id: z.string().optional(),
+    message: z.string().optional(),
+  })).optional(),
+  id: z.string().optional(),
+  model: z.string().optional(),
+  object: z.string().optional(),
+}).passthrough();
+
+const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
+  chunks: z.array(z.object({
+    id: z.string().optional(),
+    instance_id: z.string().optional(),
+    item: z.object({
+      key: z.string().optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
+      timestamp: z.number().optional(),
+    }).optional(),
+    media_end_ms: z.number().int().min(0).optional(),
+    media_start_ms: z.number().int().min(0).optional(),
+    score: z.number().min(0).max(1).optional(),
+    scoring_details: z.object({
+      fusion_method: z.enum(["rrf", "max"]).optional(),
+      keyword_rank: z.number().optional(),
+      keyword_score: z.number().min(0).optional(),
+      reranking_score: z.number().min(0).max(1).optional(),
+      vector_rank: z.number().optional(),
+      vector_score: z.number().min(0).max(1).optional(),
+    }).optional(),
+    source_media_type: z.enum(["audio", "video"]).optional(),
     text: z.string().optional(),
     type: z.string().optional(),
   })).optional(),
@@ -3008,6 +2970,11 @@ const ListPublicFinetunesSchema = z.object({
   ),
 });
 
+const GetWorkersAiDownloadFinetuneAssetSchema = z.object({
+  file_name: z.string().optional(),
+  file_url: z.string().optional(),
+}).passthrough();
+
 const GetModelSchemaSchema = z.object({
   input: z.object({
     additionalProperties: z.boolean().optional(),
@@ -3034,270 +3001,6 @@ const GetWorkersAiSearchModelSchema = z.union([
 ]);
 
 const CreateWorkersAiPostRunGenericSchema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfAi4bharatIndictrans2EnIndic1bSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfAi4bharatNonomniIndictrans2EnIndic1bSchema = z
-  .object({}).passthrough();
-
-const WorkersAiPostRunCfAisingaporeGemmaSeaLionV427bItSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfBaaiBgeBaseEnV15Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfBaaiBgeLargeEnV15Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfBaaiBgeM3Schema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfBaaiBgeRerankerBaseSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfBaaiBgeSmallEnV15Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfBaaiNonomniBgeBaseEnV15Schema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfBaaiNonomniBgeLargeEnV15Schema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfBaaiNonomniBgeM3Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfBaaiNonomniBgeSmallEnV15Schema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfBlackForestLabsFlux1SchnellSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2DevSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein4bSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein9bSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfBytedanceStableDiffusionXlLightningSchema = z
-  .object({}).passthrough();
-
-const CreateWorkersAiPostRunCfDeepgramAura1Schema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfDeepgramAura2EnSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfDeepgramAura2EsSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfDeepgramFluxSchema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfDeepgramNova3Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfDeepseekAiDeepseekMath7bInstructSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfDeepseekAiDeepseekR1DistillQwen32bSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfDefogSqlcoder7b2Schema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfFacebookBartLargeCnnSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfFacebookNonomniBartLargeCnnSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfFblgitUnaCybertron7bV2Bf16Schema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfGoogleEmbeddinggemma300mSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfGoogleGemma2bItLoraSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfGoogleGemma312bItSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfGoogleGemma426bA4bItSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfGoogleGemma7bItLoraSchema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfGoogleNonomniEmbeddinggemma300mSchema = z.object(
-  {},
-).passthrough();
-
-const CreateWorkersAiPostRunCfHuggingfaceDistilbertSst2Int8Schema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfHuggingfaceNonomniDistilbertSst2Int8Schema = z
-  .object({}).passthrough();
-
-const WorkersAiPostRunCfIbmGraniteGranite40HMicroSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfLeonardoLucidOriginSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfLeonardoPhoenix10Schema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfLykonDreamshaper8LcmSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlamaLlama27bChatHfLoraSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama27bChatFp16Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfMetaLlama27bChatInt8Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfMetaLlama38bInstructSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfMetaLlama38bInstructAwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama3170bInstructFp8FastSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama318bInstructAwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama318bInstructFp8Schema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama318bInstructFp8FastSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama3211bVisionInstructSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama321bInstructSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama323bInstructSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama3370bInstructFp8FastSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaLlama4Scout17b16eInstructSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfMetaLlamaGuard38bSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMetaM2m10012bSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfMicrosoftPhi2Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfMistralMistral7bInstructV01Schema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMistralMistral7bInstructV02LoraSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMistralaiMistralSmall3124bInstructSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfMoonshotaiKimiK25Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfMoonshotaiKimiK26Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfMoonshotaiKimiK27CodeSchema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfMyshellAiMelottsSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfNvidiaNemotron3120bA12bSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfNvidiaNemotronSpeechStreamingEn06bSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfOpenaiGptOss120bSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfOpenaiGptOss20bSchema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfOpenaiWhisperLargeV3TurboSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfOpenchatOpenchat350106Schema = z.object({})
-  .passthrough();
-
-const CreateWorkersAiPostRunCfPfnetPlamoEmbedding1bSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfQwenQwen1505bChatSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfQwenQwen1518bChatSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfQwenQwen1514bChatAwqSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfQwenQwen157bChatAwqSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfQwenQwen25Coder32bInstructSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfQwenQwen330bA3bFp8Schema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfQwenQwen3Embedding06bSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfQwenQwq32bSchema = z.object({}).passthrough();
-
-const CreateWorkersAiPostRunCfRunwaymlStableDiffusionV15Img2imgSchema = z
-  .object({}).passthrough();
-
-const CreateWorkersAiPostRunCfRunwaymlStableDiffusionV15InpaintingSchema = z
-  .object({}).passthrough();
-
-const CreateWorkersAiPostRunCfStabilityaiStableDiffusionXlBase10Schema = z
-  .object({}).passthrough();
-
-const WorkersAiPostRunCfTheblokeDiscolmGerman7bV1AwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfTiiuaeFalcon7bInstructSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfTinyllamaTinyllama11bChatV10Schema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunCfZaiOrgGlm47FlashSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunCfZaiOrgGlm52Schema = z.object({}).passthrough();
-
-const WorkersAiPostRunHfGoogleGemma7bItSchema = z.object({}).passthrough();
-
-const WorkersAiPostRunHfMistralMistral7bInstructV02Schema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfNexusflowStarlingLm7bBetaSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfNousresearchHermes2ProMistral7bSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfTheblokeDeepseekCoder67bBaseAwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfTheblokeDeepseekCoder67bInstructAwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfTheblokeLlama213bChatAwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfTheblokeMistral7bInstructV01AwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfTheblokeNeuralChat7bV31AwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfTheblokeOpenhermes25Mistral7bAwqSchema = z.object({})
-  .passthrough();
-
-const WorkersAiPostRunHfTheblokeZephyr7bBetaAwqSchema = z.object({})
-  .passthrough();
 
 const WorkersAiPostRunModelSchema = z.union([
   z.array(z.object({
@@ -3403,6 +3106,22 @@ const GetToMarkdownSupportedSchema = z.object({
   ),
 });
 
+const CreateWorkersAiAiGatewayWebSearchSchema = z.object({
+  items: z.array(z.object({
+    description: z.string().optional(),
+    faviconUrl: z.string().optional(),
+    imageUrl: z.string().optional(),
+    lastModifiedDate: z.string().optional(),
+    title: z.string().optional(),
+    url: z.string().optional(),
+  })).optional(),
+  metadata: z.object({
+    latencyMs: z.number().optional(),
+    query: z.string().optional(),
+    requestId: z.string().optional(),
+  }).optional(),
+}).passthrough();
+
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -3410,7 +3129,7 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.11.03.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -3481,6 +3200,12 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -3502,33 +3227,21 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "spending_limit": {
-      description: "Get spending limit",
-      schema: GetSpendingLimitSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "topup": {
       description: "Create a top-up",
       schema: CreateTopupSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "topup_config": {
-      description: "Get auto top-up configuration",
-      schema: GetTopupConfigSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "aig_billing_set_topup_config": {
       description: "Set auto top-up configuration",
-      schema: CreateAigBillingSetTopupConfigSchema,
+      schema: AigBillingSetTopupConfigSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "topup_limits": {
-      description: "Get account top-up limits",
-      schema: GetTopupLimitsSchema,
+    "topup_eligibility": {
+      description: "Get top-up eligibility",
+      schema: GetTopupEligibilitySchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -3545,61 +3258,79 @@ export const model = {
       garbageCollection: 20,
     },
     "account_provider": {
-      description: "List Account Providers",
-      schema: ListAccountProviderSchema,
+      description: "List custom providers",
+      schema: ListAccountProviderSchema.extend(
+        z.object({
+          headers: z.string().max(8192).optional().describe(
+            "JSON object of extra HTTP headers that AI Gateway sends to the provider. Values can contain crede...",
+          ).meta({ sensitive: true }),
+        }).shape,
+      ),
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     "account_provider_cost": {
-      description: "List Account Provider Costs",
+      description: "List custom provider pricing rules",
       schema: ListAccountProviderCostSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     "aig_config_fetch_account_provider_cost": {
-      description: "Fetch a Account Provider Cost",
+      description: "Get a custom provider pricing rule",
       schema: GetAigConfigFetchAccountProviderCostSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "aig_config_fetch_account_provider": {
-      description: "Fetch a Account Provider",
+      description: "Get a custom provider",
       schema: GetAigConfigFetchAccountProviderSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "evaluators": {
-      description: "List Evaluators",
+      description: "List evaluator types (deprecated)",
       schema: ListEvaluatorsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     "gateway": {
-      description: "List Gateways",
+      description: "List gateways",
       schema: ListGatewaySchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
+    "custom_domain": {
+      description: "List custom domains",
+      schema: ListCustomDomainSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "aig_config_fetch_custom_domain": {
+      description: "Get a custom domain",
+      schema: GetAigConfigFetchCustomDomainSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "dataset": {
-      description: "List Datasets",
+      description: "List datasets (deprecated)",
       schema: ListDatasetSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     "aig_config_fetch_dataset": {
-      description: "Fetch a Dataset",
+      description: "Get a dataset (deprecated)",
       schema: GetAigConfigFetchDatasetSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "evaluations": {
-      description: "List Evaluations",
+      description: "List evaluations (deprecated)",
       schema: ListEvaluationsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     "aig_config_fetch_evaluations": {
-      description: "Fetch a Evaluation",
+      description: "Get an evaluation (deprecated)",
       schema: GetAigConfigFetchEvaluationsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -3634,56 +3365,80 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
+    "model_aliases": {
+      description: "List model aliases",
+      schema: ListModelAliasesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "model_alias": {
+      description: "Create a model alias",
+      schema: CreateModelAliasSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "providers": {
-      description: "List Provider Configs",
+      description: "List provider keys",
       schema: ListProvidersSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
+    "aig_config_fetch_providers": {
+      description: "Get a provider key",
+      schema: GetAigConfigFetchProvidersSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "aig_config_test_providers": {
+      description: "Check stored provider credentials",
+      schema: AigConfigTestProvidersSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "list_gateway_dynamic_routes": {
-      description: "List all AI Gateway Dynamic Routes.",
+      description: "List dynamic routes",
       schema: ListGatewayDynamicRoutesSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "aig_config_post_gateway_dynamic_route": {
-      description: "Create a new AI Gateway Dynamic Route.",
+      description: "Create a dynamic route",
       schema: CreateAigConfigPostGatewayDynamicRouteSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "gateway_dynamic_route": {
-      description: "Get an AI Gateway Dynamic Route.",
+      description: "Get a dynamic route",
       schema: GetGatewayDynamicRouteSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "list_gateway_dynamic_route_deployments": {
-      description: "List all AI Gateway Dynamic Route Deployments.",
+      description: "List dynamic route deployments",
       schema: ListGatewayDynamicRouteDeploymentsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "aig_config_post_gateway_dynamic_route_deployment": {
-      description: "Create a new AI Gateway Dynamic Route Deployment.",
+      description: "Deploy a dynamic route version",
       schema: CreateAigConfigPostGatewayDynamicRouteDeploymentSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "list_gateway_dynamic_route_versions": {
-      description: "List all AI Gateway Dynamic Route Versions.",
+      description: "List dynamic route versions",
       schema: ListGatewayDynamicRouteVersionsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "aig_config_post_gateway_dynamic_route_version": {
-      description: "Create a new AI Gateway Dynamic Route Version.",
+      description: "Create a dynamic route version",
       schema: CreateAigConfigPostGatewayDynamicRouteVersionSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "gateway_dynamic_route_version": {
-      description: "Get an AI Gateway Dynamic Route Version.",
+      description: "Get a dynamic route version",
       schema: GetGatewayDynamicRouteVersionSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -3695,8 +3450,32 @@ export const model = {
       garbageCollection: 20,
     },
     "aig_config_fetch_gateway": {
-      description: "Fetch a Gateway",
+      description: "Get a gateway",
       schema: GetAigConfigFetchGatewaySchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "logging_state": {
+      description: "Get AI Gateway logging state",
+      schema: GetLoggingStateSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "patch_logging_state": {
+      description: "Migrate AI Gateway logging to Workers Observability",
+      schema: PatchLoggingStateSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "namespaces": {
+      description: "List namespaces",
+      schema: ListNamespacesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "namespace": {
+      description: "Create a namespace",
+      schema: CreateNamespaceSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -3709,78 +3488,6 @@ export const model = {
     "instance": {
       description: "Create an AI Search instance.",
       schema: CreateInstanceSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "ai_search_fetch_instance": {
-      description: "Get an AI Search instance.",
-      schema: GetAiSearchFetchInstanceSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "ai_search_instance_chat_completion": {
-      description: "Chat Completions",
-      schema: CreateAiSearchInstanceChatCompletionSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "jobs": {
-      description: "List Jobs",
-      schema: ListJobsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 10,
-    },
-    "job": {
-      description: "Create new job",
-      schema: CreateJobSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "ai_search_instance_change_job_status": {
-      description: "Cancel an indexing job.",
-      schema: UpdateAiSearchInstanceChangeJobStatusSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "job_logs": {
-      description: "List Job Logs",
-      schema: ListJobLogsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 10,
-    },
-    "ai_search_instance_search": {
-      description: "Search",
-      schema: CreateAiSearchInstanceSearchSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "ai_search_stats": {
-      description: "Get instance statistics.",
-      schema: GetAiSearchStatsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "namespaces": {
-      description: "List namespaces.",
-      schema: ListNamespacesSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 10,
-    },
-    "namespace": {
-      description: "Create namespace.",
-      schema: CreateNamespaceSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "ai_search_fetch_namespace": {
-      description: "Read namespace.",
-      schema: GetAiSearchFetchNamespaceSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "ai_search_namespace_multi_instance_chat_completion": {
-      description: "Multi-Instance Chat Completions",
-      schema: CreateAiSearchNamespaceMultiInstanceChatCompletionSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -3838,9 +3545,33 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
+    "jobs": {
+      description: "List Jobs",
+      schema: ListJobsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "job": {
+      description: "Create new job",
+      schema: CreateJobSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "ai_search_namespace_instance_change_job_status": {
       description: "Cancel an indexing job.",
       schema: UpdateAiSearchNamespaceInstanceChangeJobStatusSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "job_logs": {
+      description: "List Job Logs",
+      schema: ListJobLogsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "ai_search_namespace_purge_instance_cache": {
+      description: "Purge search cache.",
+      schema: AiSearchNamespacePurgeInstanceCacheSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -3856,6 +3587,18 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
+    "ai_search_fetch_namespace": {
+      description: "Get a namespace",
+      schema: GetAiSearchFetchNamespaceSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "ai_search_namespace_multi_instance_chat_completion": {
+      description: "Multi-Instance Chat Completions",
+      schema: CreateAiSearchNamespaceMultiInstanceChatCompletionSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "ai_search_namespace_multi_instance_search": {
       description: "Multi-Instance Search",
       schema: CreateAiSearchNamespaceMultiInstanceSearchSchema,
@@ -3863,13 +3606,13 @@ export const model = {
       garbageCollection: 20,
     },
     "tokens": {
-      description: "List tokens.",
+      description: "List tokens",
       schema: ListTokensSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     "ai_search_fetch_tokens": {
-      description: "Read token.",
+      description: "Get a token",
       schema: GetAiSearchFetchTokensSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -3898,8 +3641,14 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
+    "workers_ai_download_finetune_asset": {
+      description: "Download a Finetune Asset",
+      schema: GetWorkersAiDownloadFinetuneAssetSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "model_schema": {
-      description: "Get Model Schema",
+      description: "Get an AI model's input and output schemas",
       schema: GetModelSchemaSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -3911,720 +3660,13 @@ export const model = {
       garbageCollection: 20,
     },
     "workers_ai_post_run_generic": {
-      description: "Execute AI Model (Generic)",
+      description: "Run an AI model with request options",
       schema: CreateWorkersAiPostRunGenericSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b": {
-      description: "Execute @cf/ai4bharat/indictrans2-en-indic-1B model.",
-      schema: CreateWorkersAiPostRunCfAi4bharatIndictrans2EnIndic1bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b": {
-      description:
-        "Execute @cf/ai4bharat/nonomni-indictrans2-en-indic-1b model.",
-      schema:
-        CreateWorkersAiPostRunCfAi4bharatNonomniIndictrans2EnIndic1bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it": {
-      description: "Execute @cf/aisingapore/gemma-sea-lion-v4-27b-it model.",
-      schema: WorkersAiPostRunCfAisingaporeGemmaSeaLionV427bItSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_bge_base_en_v1_5": {
-      description: "Execute @cf/baai/bge-base-en-v1.5 model.",
-      schema: WorkersAiPostRunCfBaaiBgeBaseEnV15Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_bge_large_en_v1_5": {
-      description: "Execute @cf/baai/bge-large-en-v1.5 model.",
-      schema: WorkersAiPostRunCfBaaiBgeLargeEnV15Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_bge_m3": {
-      description: "Execute @cf/baai/bge-m3 model.",
-      schema: WorkersAiPostRunCfBaaiBgeM3Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_bge_reranker_base": {
-      description: "Execute @cf/baai/bge-reranker-base model.",
-      schema: CreateWorkersAiPostRunCfBaaiBgeRerankerBaseSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_bge_small_en_v1_5": {
-      description: "Execute @cf/baai/bge-small-en-v1.5 model.",
-      schema: WorkersAiPostRunCfBaaiBgeSmallEnV15Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5": {
-      description: "Execute @cf/baai/nonomni-bge-base-en-v1.5 model.",
-      schema: WorkersAiPostRunCfBaaiNonomniBgeBaseEnV15Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5": {
-      description: "Execute @cf/baai/nonomni-bge-large-en-v1.5 model.",
-      schema: WorkersAiPostRunCfBaaiNonomniBgeLargeEnV15Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_nonomni_bge_m3": {
-      description: "Execute @cf/baai/nonomni-bge-m3 model.",
-      schema: WorkersAiPostRunCfBaaiNonomniBgeM3Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5": {
-      description: "Execute @cf/baai/nonomni-bge-small-en-v1.5 model.",
-      schema: WorkersAiPostRunCfBaaiNonomniBgeSmallEnV15Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_black_forest_labs_flux_1_schnell": {
-      description: "Execute @cf/black-forest-labs/flux-1-schnell model.",
-      schema: CreateWorkersAiPostRunCfBlackForestLabsFlux1SchnellSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_black_forest_labs_flux_2_dev": {
-      description: "Execute @cf/black-forest-labs/flux-2-dev model.",
-      schema: CreateWorkersAiPostRunCfBlackForestLabsFlux2DevSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b": {
-      description: "Execute @cf/black-forest-labs/flux-2-klein-4b model.",
-      schema: CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein4bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b": {
-      description: "Execute @cf/black-forest-labs/flux-2-klein-9b model.",
-      schema: CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein9bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning": {
-      description: "Execute @cf/bytedance/stable-diffusion-xl-lightning model.",
-      schema: CreateWorkersAiPostRunCfBytedanceStableDiffusionXlLightningSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_aura": {
-      description: "Open Websocket connection with @cf/deepgram/aura model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_aura_1": {
-      description: "Open Websocket connection with @cf/deepgram/aura-1 model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_deepgram_aura_1": {
-      description: "Execute @cf/deepgram/aura-1 model.",
-      schema: CreateWorkersAiPostRunCfDeepgramAura1Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_aura_1_internal": {
-      description:
-        "Open Websocket connection with @cf/deepgram/aura-1-internal model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_aura_2": {
-      description: "Open Websocket connection with @cf/deepgram/aura-2 model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_aura_2_en": {
-      description:
-        "Open Websocket connection with @cf/deepgram/aura-2-en model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_deepgram_aura_2_en": {
-      description: "Execute @cf/deepgram/aura-2-en model.",
-      schema: CreateWorkersAiPostRunCfDeepgramAura2EnSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws": {
-      description:
-        "Open Websocket connection with @cf/deepgram/aura-2-en-ws model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_aura_2_es": {
-      description:
-        "Open Websocket connection with @cf/deepgram/aura-2-es model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_deepgram_aura_2_es": {
-      description: "Execute @cf/deepgram/aura-2-es model.",
-      schema: CreateWorkersAiPostRunCfDeepgramAura2EsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_flux": {
-      description: "Open Websocket connection with @cf/deepgram/flux model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_deepgram_flux": {
-      description: "Execute @cf/deepgram/flux model.",
-      schema: CreateWorkersAiPostRunCfDeepgramFluxSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_nova_3": {
-      description: "Open Websocket connection with @cf/deepgram/nova-3 model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_deepgram_nova_3": {
-      description: "Execute @cf/deepgram/nova-3 model.",
-      schema: CreateWorkersAiPostRunCfDeepgramNova3Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_nova_3_internal": {
-      description:
-        "Open Websocket connection with @cf/deepgram/nova-3-internal model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_deepgram_nova_3_ws": {
-      description:
-        "Open Websocket connection with @cf/deepgram/nova-3-ws model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct": {
-      description: "Execute @cf/deepseek-ai/deepseek-math-7b-instruct model.",
-      schema: WorkersAiPostRunCfDeepseekAiDeepseekMath7bInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b": {
-      description:
-        "Execute @cf/deepseek-ai/deepseek-r1-distill-qwen-32b model.",
-      schema: WorkersAiPostRunCfDeepseekAiDeepseekR1DistillQwen32bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_defog_sqlcoder_7b_2": {
-      description: "Execute @cf/defog/sqlcoder-7b-2 model.",
-      schema: WorkersAiPostRunCfDefogSqlcoder7b2Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_facebook_bart_large_cnn": {
-      description: "Execute @cf/facebook/bart-large-cnn model.",
-      schema: CreateWorkersAiPostRunCfFacebookBartLargeCnnSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn": {
-      description: "Execute @cf/facebook/nonomni-bart-large-cnn model.",
-      schema: CreateWorkersAiPostRunCfFacebookNonomniBartLargeCnnSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16": {
-      description: "Execute @cf/fblgit/una-cybertron-7b-v2-bf16 model.",
-      schema: WorkersAiPostRunCfFblgitUnaCybertron7bV2Bf16Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_google_embeddinggemma_300m": {
-      description: "Execute @cf/google/embeddinggemma-300m model.",
-      schema: CreateWorkersAiPostRunCfGoogleEmbeddinggemma300mSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_google_gemma_2b_it_lora": {
-      description: "Execute @cf/google/gemma-2b-it-lora model.",
-      schema: WorkersAiPostRunCfGoogleGemma2bItLoraSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_google_gemma_3_12b_it": {
-      description: "Execute @cf/google/gemma-3-12b-it model.",
-      schema: WorkersAiPostRunCfGoogleGemma312bItSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_google_gemma_4_26b_a4b_it": {
-      description: "Execute @cf/google/gemma-4-26b-a4b-it model.",
-      schema: WorkersAiPostRunCfGoogleGemma426bA4bItSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_google_gemma_7b_it_lora": {
-      description: "Execute @cf/google/gemma-7b-it-lora model.",
-      schema: WorkersAiPostRunCfGoogleGemma7bItLoraSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m": {
-      description: "Execute @cf/google/nonomni-embeddinggemma-300m model.",
-      schema: CreateWorkersAiPostRunCfGoogleNonomniEmbeddinggemma300mSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8": {
-      description: "Execute @cf/huggingface/distilbert-sst-2-int8 model.",
-      schema: CreateWorkersAiPostRunCfHuggingfaceDistilbertSst2Int8Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8": {
-      description:
-        "Execute @cf/huggingface/nonomni-distilbert-sst-2-int8 model.",
-      schema:
-        CreateWorkersAiPostRunCfHuggingfaceNonomniDistilbertSst2Int8Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro": {
-      description: "Execute @cf/ibm-granite/granite-4.0-h-micro model.",
-      schema: WorkersAiPostRunCfIbmGraniteGranite40HMicroSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_leonardo_lucid_origin": {
-      description: "Execute @cf/leonardo/lucid-origin model.",
-      schema: CreateWorkersAiPostRunCfLeonardoLucidOriginSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_leonardo_phoenix_1_0": {
-      description: "Execute @cf/leonardo/phoenix-1.0 model.",
-      schema: CreateWorkersAiPostRunCfLeonardoPhoenix10Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_lykon_dreamshaper_8_lcm": {
-      description: "Execute @cf/lykon/dreamshaper-8-lcm model.",
-      schema: CreateWorkersAiPostRunCfLykonDreamshaper8LcmSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora": {
-      description: "Execute @cf/meta-llama/llama-2-7b-chat-hf-lora model.",
-      schema: WorkersAiPostRunCfMetaLlamaLlama27bChatHfLoraSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16": {
-      description: "Execute @cf/meta/llama-2-7b-chat-fp16 model.",
-      schema: WorkersAiPostRunCfMetaLlama27bChatFp16Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_2_7b_chat_int8": {
-      description: "Execute @cf/meta/llama-2-7b-chat-int8 model.",
-      schema: WorkersAiPostRunCfMetaLlama27bChatInt8Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_8b_instruct": {
-      description: "Execute @cf/meta/llama-3-8b-instruct model.",
-      schema: WorkersAiPostRunCfMetaLlama38bInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq": {
-      description: "Execute @cf/meta/llama-3-8b-instruct-awq model.",
-      schema: WorkersAiPostRunCfMetaLlama38bInstructAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast": {
-      description: "Execute @cf/meta/llama-3.1-70b-instruct-fp8-fast model.",
-      schema: WorkersAiPostRunCfMetaLlama3170bInstructFp8FastSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq": {
-      description: "Execute @cf/meta/llama-3.1-8b-instruct-awq model.",
-      schema: WorkersAiPostRunCfMetaLlama318bInstructAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8": {
-      description: "Execute @cf/meta/llama-3.1-8b-instruct-fp8 model.",
-      schema: WorkersAiPostRunCfMetaLlama318bInstructFp8Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast": {
-      description: "Execute @cf/meta/llama-3.1-8b-instruct-fp8-fast model.",
-      schema: WorkersAiPostRunCfMetaLlama318bInstructFp8FastSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct": {
-      description: "Execute @cf/meta/llama-3.2-11b-vision-instruct model.",
-      schema: WorkersAiPostRunCfMetaLlama3211bVisionInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_2_1b_instruct": {
-      description: "Execute @cf/meta/llama-3.2-1b-instruct model.",
-      schema: WorkersAiPostRunCfMetaLlama321bInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_2_3b_instruct": {
-      description: "Execute @cf/meta/llama-3.2-3b-instruct model.",
-      schema: WorkersAiPostRunCfMetaLlama323bInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast": {
-      description: "Execute @cf/meta/llama-3.3-70b-instruct-fp8-fast model.",
-      schema: WorkersAiPostRunCfMetaLlama3370bInstructFp8FastSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct": {
-      description: "Execute @cf/meta/llama-4-scout-17b-16e-instruct model.",
-      schema: WorkersAiPostRunCfMetaLlama4Scout17b16eInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_llama_guard_3_8b": {
-      description: "Execute @cf/meta/llama-guard-3-8b model.",
-      schema: CreateWorkersAiPostRunCfMetaLlamaGuard38bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_meta_m2m100_1_2b": {
-      description: "Execute @cf/meta/m2m100-1.2b model.",
-      schema: WorkersAiPostRunCfMetaM2m10012bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_microsoft_phi_2": {
-      description: "Execute @cf/microsoft/phi-2 model.",
-      schema: WorkersAiPostRunCfMicrosoftPhi2Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1": {
-      description: "Execute @cf/mistral/mistral-7b-instruct-v0.1 model.",
-      schema: WorkersAiPostRunCfMistralMistral7bInstructV01Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora": {
-      description: "Execute @cf/mistral/mistral-7b-instruct-v0.2-lora model.",
-      schema: WorkersAiPostRunCfMistralMistral7bInstructV02LoraSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct": {
-      description:
-        "Execute @cf/mistralai/mistral-small-3.1-24b-instruct model.",
-      schema: WorkersAiPostRunCfMistralaiMistralSmall3124bInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_moonshotai_kimi_k2_5": {
-      description: "Execute @cf/moonshotai/kimi-k2.5 model.",
-      schema: WorkersAiPostRunCfMoonshotaiKimiK25Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_moonshotai_kimi_k2_6": {
-      description: "Execute @cf/moonshotai/kimi-k2.6 model.",
-      schema: WorkersAiPostRunCfMoonshotaiKimiK26Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_moonshotai_kimi_k2_7_code": {
-      description: "Execute @cf/moonshotai/kimi-k2.7-code model.",
-      schema: WorkersAiPostRunCfMoonshotaiKimiK27CodeSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_myshell_ai_melotts": {
-      description: "Execute @cf/myshell-ai/melotts model.",
-      schema: CreateWorkersAiPostRunCfMyshellAiMelottsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b": {
-      description: "Execute @cf/nvidia/nemotron-3-120b-a12b model.",
-      schema: WorkersAiPostRunCfNvidiaNemotron3120bA12bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b":
-      {
-        description:
-          "Open Websocket connection with @cf/nvidia/nemotron-speech-streaming-en-0.6b model.",
-        schema: z.object({}),
-        lifetime: "infinite" as const,
-        garbageCollection: 20,
-      },
-    "workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b": {
-      description:
-        "Execute @cf/nvidia/nemotron-speech-streaming-en-0.6b model.",
-      schema: WorkersAiPostRunCfNvidiaNemotronSpeechStreamingEn06bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_openai_gpt_oss_120b": {
-      description: "Execute @cf/openai/gpt-oss-120b model.",
-      schema: WorkersAiPostRunCfOpenaiGptOss120bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_openai_gpt_oss_20b": {
-      description: "Execute @cf/openai/gpt-oss-20b model.",
-      schema: WorkersAiPostRunCfOpenaiGptOss20bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_openai_whisper_large_v3_turbo": {
-      description: "Execute @cf/openai/whisper-large-v3-turbo model.",
-      schema: CreateWorkersAiPostRunCfOpenaiWhisperLargeV3TurboSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_openchat_openchat_3_5_0106": {
-      description: "Execute @cf/openchat/openchat-3.5-0106 model.",
-      schema: WorkersAiPostRunCfOpenchatOpenchat350106Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_pfnet_plamo_embedding_1b": {
-      description: "Execute @cf/pfnet/plamo-embedding-1b model.",
-      schema: CreateWorkersAiPostRunCfPfnetPlamoEmbedding1bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2": {
-      description:
-        "Open Websocket connection with @cf/pipecat-ai/smart-turn-v2 model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3": {
-      description:
-        "Open Websocket connection with @cf/pipecat-ai/smart-turn-v3 model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat": {
-      description: "Execute @cf/qwen/qwen1.5-0.5b-chat model.",
-      schema: WorkersAiPostRunCfQwenQwen1505bChatSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat": {
-      description: "Execute @cf/qwen/qwen1.5-1.8b-chat model.",
-      schema: WorkersAiPostRunCfQwenQwen1518bChatSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq": {
-      description: "Execute @cf/qwen/qwen1.5-14b-chat-awq model.",
-      schema: WorkersAiPostRunCfQwenQwen1514bChatAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq": {
-      description: "Execute @cf/qwen/qwen1.5-7b-chat-awq model.",
-      schema: WorkersAiPostRunCfQwenQwen157bChatAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct": {
-      description: "Execute @cf/qwen/qwen2.5-coder-32b-instruct model.",
-      schema: WorkersAiPostRunCfQwenQwen25Coder32bInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8": {
-      description: "Execute @cf/qwen/qwen3-30b-a3b-fp8 model.",
-      schema: WorkersAiPostRunCfQwenQwen330bA3bFp8Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b": {
-      description: "Execute @cf/qwen/qwen3-embedding-0.6b model.",
-      schema: CreateWorkersAiPostRunCfQwenQwen3Embedding06bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_qwen_qwq_32b": {
-      description: "Execute @cf/qwen/qwq-32b model.",
-      schema: WorkersAiPostRunCfQwenQwq32bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img": {
-      description: "Execute @cf/runwayml/stable-diffusion-v1-5-img2img model.",
-      schema: CreateWorkersAiPostRunCfRunwaymlStableDiffusionV15Img2imgSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting": {
-      description:
-        "Execute @cf/runwayml/stable-diffusion-v1-5-inpainting model.",
-      schema:
-        CreateWorkersAiPostRunCfRunwaymlStableDiffusionV15InpaintingSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0": {
-      description:
-        "Execute @cf/stabilityai/stable-diffusion-xl-base-1.0 model.",
-      schema: CreateWorkersAiPostRunCfStabilityaiStableDiffusionXlBase10Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_sven_test_pipe_http": {
-      description:
-        "Open Websocket connection with @cf/sven/test-pipe-http model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_websocket_run_cf_test_hello_world_cog": {
-      description:
-        "Open Websocket connection with @cf/test/hello-world-cog model.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq": {
-      description: "Execute @cf/thebloke/discolm-german-7b-v1-awq model.",
-      schema: WorkersAiPostRunCfTheblokeDiscolmGerman7bV1AwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_tiiuae_falcon_7b_instruct": {
-      description: "Execute @cf/tiiuae/falcon-7b-instruct model.",
-      schema: WorkersAiPostRunCfTiiuaeFalcon7bInstructSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0": {
-      description: "Execute @cf/tinyllama/tinyllama-1.1b-chat-v1.0 model.",
-      schema: WorkersAiPostRunCfTinyllamaTinyllama11bChatV10Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_zai_org_glm_4_7_flash": {
-      description: "Execute @cf/zai-org/glm-4.7-flash model.",
-      schema: WorkersAiPostRunCfZaiOrgGlm47FlashSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_zai_org_glm_5_2": {
-      description: "Execute @cf/zai-org/glm-5.2 model.",
-      schema: WorkersAiPostRunCfZaiOrgGlm52Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_google_gemma_7b_it": {
-      description: "Execute @hf/google/gemma-7b-it model.",
-      schema: WorkersAiPostRunHfGoogleGemma7bItSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2": {
-      description: "Execute @hf/mistral/mistral-7b-instruct-v0.2 model.",
-      schema: WorkersAiPostRunHfMistralMistral7bInstructV02Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta": {
-      description: "Execute @hf/nexusflow/starling-lm-7b-beta model.",
-      schema: WorkersAiPostRunHfNexusflowStarlingLm7bBetaSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b": {
-      description: "Execute @hf/nousresearch/hermes-2-pro-mistral-7b model.",
-      schema: WorkersAiPostRunHfNousresearchHermes2ProMistral7bSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq": {
-      description: "Execute @hf/thebloke/deepseek-coder-6.7b-base-awq model.",
-      schema: WorkersAiPostRunHfTheblokeDeepseekCoder67bBaseAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq": {
-      description:
-        "Execute @hf/thebloke/deepseek-coder-6.7b-instruct-awq model.",
-      schema: WorkersAiPostRunHfTheblokeDeepseekCoder67bInstructAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq": {
-      description: "Execute @hf/thebloke/llama-2-13b-chat-awq model.",
-      schema: WorkersAiPostRunHfTheblokeLlama213bChatAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq": {
-      description: "Execute @hf/thebloke/mistral-7b-instruct-v0.1-awq model.",
-      schema: WorkersAiPostRunHfTheblokeMistral7bInstructV01AwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq": {
-      description: "Execute @hf/thebloke/neural-chat-7b-v3-1-awq model.",
-      schema: WorkersAiPostRunHfTheblokeNeuralChat7bV31AwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq": {
-      description: "Execute @hf/thebloke/openhermes-2.5-mistral-7b-awq model.",
-      schema: WorkersAiPostRunHfTheblokeOpenhermes25Mistral7bAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq": {
-      description: "Execute @hf/thebloke/zephyr-7b-beta-awq model.",
-      schema: WorkersAiPostRunHfTheblokeZephyr7bBetaAwqSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "workers_ai_post_run_model": {
-      description: "Execute AI model",
+      description: "Run a Workers AI model",
       schema: WorkersAiPostRunModelSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -4636,10 +3678,16 @@ export const model = {
       garbageCollection: 10,
     },
     "get_to_markdown_supported": {
-      description: "Get all converted formats supported",
+      description: "List supported Markdown conversion formats",
       schema: GetToMarkdownSupportedSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "workers_ai_ai_gateway_web_search": {
+      description: "Search the web through AI Gateway",
+      schema: CreateWorkersAiAiGatewayWebSearchSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
   },
 
@@ -4747,73 +3795,14 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_spending_limit: {
-      description: "Get spending limit",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-gateway/billing/spending-limit`,
-        );
-
-        const handle = await context.writeResource(
-          "spending_limit",
-          "spending_limit-current",
-          result,
-        );
-        context.logger.info("Fetched spending_limit", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    delete_spending_limit: {
-      description: "Delete spending limit",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/ai-gateway/billing/spending-limit`,
-        );
-
-        context.logger.info("Deleted resource {id}", { id: "unknown" });
-        return { dataHandles: [] };
-      },
-    },
     create_topup: {
       description: "Create a top-up",
       arguments: z.object({
         amount: z.number().int().min(1000).describe(
           "Top-up amount in cents (min 1000).",
+        ),
+        payment_method_id: z.string().optional().describe(
+          "Payment method to charge instead of the customer's default payment method.",
         ),
       }),
       execute: async (
@@ -4856,49 +3845,9 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_topup_config: {
-      description: "Get auto top-up configuration",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-gateway/billing/topup/config`,
-        );
-
-        const handle = await context.writeResource(
-          "topup_config",
-          "topup_config-current",
-          result,
-        );
-        context.logger.info("Fetched topup_config", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    create_aig_billing_set_topup_config: {
+    aig_billing_set_topup_config: {
       description: "Set auto top-up configuration",
-      arguments: z.object({
-        amount: z.number().int().min(1000).describe(
-          "Auto top-up amount in cents (min 1000).",
-        ),
-        threshold: z.number().int().min(500).describe(
-          "Balance threshold in cents that triggers auto top-up (min 500).",
-        ),
-      }),
+      arguments: z.object({}),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -4915,33 +3864,19 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
-
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/ai-gateway/billing/topup/config`,
-          body,
+          args,
         );
 
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
-        );
         const handle = await context.writeResource(
           "aig_billing_set_topup_config",
-          id,
-          result,
+          "aig_billing_set_topup_config-current",
+          result ?? {},
         );
-        context.logger.info("Created aig_billing_set_topup_config {id}", {
-          id,
-        });
+        context.logger.info("Executed aig_billing_set_topup_config", {});
         return { dataHandles: [handle] };
       },
     },
@@ -4974,8 +3909,8 @@ export const model = {
         return { dataHandles: [] };
       },
     },
-    get_topup_limits: {
-      description: "Get account top-up limits",
+    get_topup_eligibility: {
+      description: "Get top-up eligibility",
       arguments: z.object({}),
       execute: async (
         _args: Record<string, unknown>,
@@ -4995,15 +3930,15 @@ export const model = {
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/ai-gateway/billing/topup/limits`,
+          `/accounts/${accountId}/ai-gateway/billing/topup/eligibility`,
         );
 
         const handle = await context.writeResource(
-          "topup_limits",
-          "topup_limits-current",
+          "topup_eligibility",
+          "topup_eligibility-current",
           result,
         );
-        context.logger.info("Fetched topup_limits", {});
+        context.logger.info("Fetched topup_eligibility", {});
         return { dataHandles: [handle] };
       },
     },
@@ -5011,7 +3946,7 @@ export const model = {
       description: "Check top-up status",
       arguments: z.object({
         payment_intent_id: z.string().describe(
-          "Stripe invoice ID to check status for.",
+          "Top-up identifier to check status for.",
         ),
       }),
       execute: async (
@@ -5104,7 +4039,7 @@ export const model = {
       },
     },
     list_account_provider: {
-      description: "List Account Providers",
+      description: "List custom providers",
       arguments: z.object({
         page: z.number().optional(),
         per_page: z.number().optional(),
@@ -5149,8 +4084,13 @@ export const model = {
           );
         }
 
+        // Secrets swamp cannot move into a vault (inside lists, maps or
+        // unions) are removed before the resource is written.
+        const storedItems = stripSensitive(results, [[{ "each": true }, {
+          "k": "headers",
+        }]]);
         const handle = await context.writeResource("account_provider", "main", {
-          items: results,
+          items: storedItems,
           truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
@@ -5164,19 +4104,21 @@ export const model = {
       },
     },
     create_account_provider: {
-      description: "Create a new Account Provider",
+      description: "Create a custom provider",
       arguments: z.object({
         base_url: z.string(),
         beta: z.boolean().optional(),
         curl_example: z.string().optional(),
         description: z.string().optional(),
         enable: z.boolean().optional(),
-        headers: z.string().max(8192).optional(),
+        headers: z.string().max(8192).optional().describe(
+          "JSON object of extra HTTP headers that AI Gateway sends to the provider. Valu... Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
         js_example: z.string().optional(),
         link: z.string().optional(),
         name: z.string(),
         position: z.number().int().optional(),
-        slug: z.string(),
+        slug: z.string().regex(new RegExp("^[a-zA-Z0-9_-]+$")),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5205,7 +4147,7 @@ export const model = {
 
         // No id in the response and no path parameter to key on: name the
         // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
+        const secretArgs = new Set<string>(["headers"]);
         const requestKey = Object.entries(args)
           .filter(([k]) => !secretArgs.has(k))
           .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
@@ -5223,7 +4165,7 @@ export const model = {
       },
     },
     list_account_provider_cost: {
-      description: "List Account Provider Costs",
+      description: "List custom provider pricing rules",
       arguments: z.object({
         page: z.number().optional(),
         per_page: z.number().optional(),
@@ -5289,9 +4231,11 @@ export const model = {
       },
     },
     create_account_provider_cost: {
-      description: "Create a new Account Provider Cost",
+      description: "Create a custom provider pricing rule",
       arguments: z.object({
-        account_provider_id: z.string(),
+        account_provider_id: z.string().describe(
+          "ID of the custom provider that the pricing rule applies to.",
+        ),
         cost_in: z.number().optional(),
         cost_out: z.number().optional(),
         cost_type: z.string().optional(),
@@ -5358,7 +4302,7 @@ export const model = {
       },
     },
     get_aig_config_fetch_account_provider_cost: {
-      description: "Fetch a Account Provider Cost",
+      description: "Get a custom provider pricing rule",
       arguments: z.object({
         id: z.string(),
       }),
@@ -5396,7 +4340,7 @@ export const model = {
       },
     },
     update_account_provider_cost: {
-      description: "Update a Account Provider Cost",
+      description: "Update a custom provider pricing rule",
       arguments: z.object({
         id: z.string(),
         cost_in: z.number().optional(),
@@ -5459,7 +4403,7 @@ export const model = {
       },
     },
     delete_account_provider_cost: {
-      description: "Delete a Account Provider Cost",
+      description: "Delete a custom provider pricing rule",
       arguments: z.object({
         id: z.string(),
       }),
@@ -5490,7 +4434,7 @@ export const model = {
       },
     },
     get_aig_config_fetch_account_provider: {
-      description: "Fetch a Account Provider",
+      description: "Get a custom provider",
       arguments: z.object({
         id: z.string(),
       }),
@@ -5525,7 +4469,7 @@ export const model = {
       },
     },
     update_account_provider: {
-      description: "Update a Account Provider",
+      description: "Update a custom provider",
       arguments: z.object({
         id: z.string(),
         base_url: z.string().optional(),
@@ -5533,13 +4477,15 @@ export const model = {
         curl_example: z.string().optional(),
         description: z.string().optional(),
         enable: z.boolean().optional(),
-        headers: z.string().max(8192).optional(),
+        headers: z.string().max(8192).optional().describe(
+          "JSON object of extra HTTP headers that AI Gateway sends to the provider. Valu... Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
         js_example: z.string().optional(),
         link: z.string().optional(),
         logo: z.string().optional(),
         name: z.string().optional(),
         position: z.number().int().optional(),
-        slug: z.string().optional(),
+        slug: z.string().regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5580,7 +4526,7 @@ export const model = {
       },
     },
     delete_account_provider: {
-      description: "Delete a Account Provider",
+      description: "Delete a custom provider",
       arguments: z.object({
         id: z.string(),
       }),
@@ -5611,7 +4557,7 @@ export const model = {
       },
     },
     list_evaluators: {
-      description: "List Evaluators",
+      description: "List evaluator types (deprecated)",
       arguments: z.object({
         page: z.number().optional(),
         per_page: z.number().optional(),
@@ -5670,7 +4616,7 @@ export const model = {
       },
     },
     list_gateway: {
-      description: "List Gateways",
+      description: "List gateways",
       arguments: z.object({
         page: z.number().optional(),
         per_page: z.number().optional(),
@@ -5726,33 +4672,145 @@ export const model = {
       },
     },
     create_gateway: {
-      description: "Create a new Gateway",
+      description: "Create a gateway",
       arguments: z.object({
-        authentication: z.boolean().optional(),
+        authentication: z.boolean().optional().describe(
+          "Require authentication for gateway access. New gateways must have authenticat...",
+        ),
+        byok_only: z.boolean().optional().describe(
+          "Requires customer-provided provider credentials and prevents fallback to Unif...",
+        ),
         cache_invalidate_on_update: z.boolean(),
         cache_ttl: z.number().int().min(0).nullable(),
         collect_logs: z.boolean(),
+        dlp: z.union([
+          z.object({
+            action: z.enum(["BLOCK", "FLAG"]),
+            enabled: z.boolean(),
+            profiles: z.array(z.string()),
+          }),
+          z.object({
+            enabled: z.boolean(),
+            policies: z.array(z.object({
+              action: z.enum(["FLAG", "BLOCK"]),
+              check: z.array(z.enum(["REQUEST", "RESPONSE"])),
+              enabled: z.boolean(),
+              id: z.string(),
+              profiles: z.array(z.string()),
+            })),
+          }),
+        ]).optional(),
+        guardrails: z.object({
+          prompt: z.object({
+            P1: z.enum(["FLAG", "BLOCK"]).optional(),
+            S1: z.enum(["FLAG", "BLOCK"]).optional(),
+            S10: z.enum(["FLAG", "BLOCK"]).optional(),
+            S11: z.enum(["FLAG", "BLOCK"]).optional(),
+            S12: z.enum(["FLAG", "BLOCK"]).optional(),
+            S13: z.enum(["FLAG", "BLOCK"]).optional(),
+            S14: z.enum(["FLAG", "BLOCK"]).optional(),
+            S2: z.enum(["FLAG", "BLOCK"]).optional(),
+            S3: z.enum(["FLAG", "BLOCK"]).optional(),
+            S4: z.enum(["FLAG", "BLOCK"]).optional(),
+            S5: z.enum(["FLAG", "BLOCK"]).optional(),
+            S6: z.enum(["FLAG", "BLOCK"]).optional(),
+            S7: z.enum(["FLAG", "BLOCK"]).optional(),
+            S8: z.enum(["FLAG", "BLOCK"]).optional(),
+            S9: z.enum(["FLAG", "BLOCK"]).optional(),
+          }),
+          response: z.object({
+            P1: z.enum(["FLAG", "BLOCK"]).optional(),
+            S1: z.enum(["FLAG", "BLOCK"]).optional(),
+            S10: z.enum(["FLAG", "BLOCK"]).optional(),
+            S11: z.enum(["FLAG", "BLOCK"]).optional(),
+            S12: z.enum(["FLAG", "BLOCK"]).optional(),
+            S13: z.enum(["FLAG", "BLOCK"]).optional(),
+            S14: z.enum(["FLAG", "BLOCK"]).optional(),
+            S2: z.enum(["FLAG", "BLOCK"]).optional(),
+            S3: z.enum(["FLAG", "BLOCK"]).optional(),
+            S4: z.enum(["FLAG", "BLOCK"]).optional(),
+            S5: z.enum(["FLAG", "BLOCK"]).optional(),
+            S6: z.enum(["FLAG", "BLOCK"]).optional(),
+            S7: z.enum(["FLAG", "BLOCK"]).optional(),
+            S8: z.enum(["FLAG", "BLOCK"]).optional(),
+            S9: z.enum(["FLAG", "BLOCK"]).optional(),
+          }),
+        }).nullable().optional(),
+        log_classification: z.boolean().optional(),
         log_management: z.number().int().min(10000).max(10000000).nullable()
           .optional(),
         log_management_strategy: z.enum(["STOP_INSERTING", "DELETE_OLDEST"])
           .nullable().optional(),
         logpush: z.boolean().optional(),
         logpush_public_key: z.string().min(16).max(1024).nullable().optional(),
+        multiprovider_enabled: z.boolean().optional().describe(
+          "Lets requests to a model use every provider that serves it. When off, a model...",
+        ),
+        otel: z.array(z.object({
+          authorization: z.string().max(256).optional(),
+          content_type: z.enum(["json", "protobuf"]).optional().default("json"),
+          headers: z.record(z.string(), z.string().max(4096)),
+          url: z.string().max(2048),
+        })).nullable().optional(),
         rate_limiting_interval: z.number().int().min(0).nullable(),
         rate_limiting_limit: z.number().int().min(0).nullable(),
         rate_limiting_technique: z.enum(["fixed", "sliding"]).nullable()
           .optional(),
         retry_backoff: z.enum(["constant", "linear", "exponential"]).nullable()
           .optional().describe("Backoff strategy for retry delays"),
-        retry_delay: z.number().int().min(0).max(5000).nullable().optional()
-          .describe("Delay between retry attempts in milliseconds (0-5000)"),
+        retry_delay: z.number().int().min(0).max(60000).nullable().optional()
+          .describe("Delay between retry attempts in milliseconds (0-60000)"),
         retry_max_attempts: z.number().int().min(1).max(5).nullable().optional()
           .describe(
             "Maximum number of retry attempts for failed requests (1-5)",
           ),
-        workers_ai_billing_mode: z.enum(["postpaid"]).optional().describe(
-          "Controls how Workers AI inference calls routed through this gateway are bille...",
+        spend_limits: z.object({
+          enabled: z.boolean().optional().default(false),
+          rules: z.array(z.object({
+            enabled: z.boolean().optional().default(true),
+            id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$"))
+              .optional().default("00000000"),
+            limit: z.number().min(0),
+            limitType: z.enum(["cost"]),
+            metadata: z.record(
+              z.string(),
+              z.union([
+                z.object({
+                  mode: z.enum(["partition"]),
+                }),
+                z.object({
+                  mode: z.enum(["filter"]),
+                  values: z.array(z.unknown()),
+                }),
+              ]),
+            ).optional(),
+            model: z.object({
+              mode: z.enum(["filter"]),
+              values: z.array(z.string()),
+            }).optional(),
+            provider: z.object({
+              mode: z.enum(["filter"]),
+              values: z.array(z.string()),
+            }).optional(),
+            technique: z.enum(["fixed", "sliding"]).optional().default(
+              "sliding",
+            ),
+            window: z.number().int().min(0),
+          })).optional().default([]),
+        }).nullable().optional(),
+        store_id: z.string().nullable().optional().describe(
+          "Secrets Store used by this gateway. Omit on update to keep the current store....",
         ),
+        stripe: z.object({
+          authorization: z.string(),
+          usage_events: z.array(z.object({
+            payload: z.string(),
+          })),
+        }).nullable().optional(),
+        workers_ai_billing_mode: z.enum(["postpaid", "unified"]).optional()
+          .describe(
+            "Controls how Workers AI inference calls routed through this gateway are bille...",
+          ),
         zdr: z.boolean().optional(),
       }),
       execute: async (
@@ -5795,8 +4853,194 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    list_custom_domain: {
+      description: "List custom domains",
+      arguments: z.object({
+        gateway_id: z.string(),
+        page: z.number().optional(),
+        per_page: z.number().optional(),
+        status: z.enum([
+          "initializing",
+          "pending_dcv",
+          "active",
+          "blocked",
+          "error",
+        ]).optional(),
+        search: z.string().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/custom-domains`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("custom_domain", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} custom_domain", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_custom_domain: {
+      description: "Create a custom domain for a gateway",
+      arguments: z.object({
+        gateway_id: z.string(),
+        domain: z.string().min(1).max(253).regex(
+          new RegExp(
+            "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
+          ),
+        ).describe("Custom hostname that you own, such as `ai.example.com`."),
+        minTLS: z.enum(["1.0", "1.1", "1.2", "1.3"]).optional(),
+        zone_id: z.string().regex(new RegExp("^[0-9a-f]{32}$")).describe(
+          "ID of the Cloudflare zone that contains the custom hostname.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["gateway_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/custom-domains`,
+          body,
+        );
+
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(created?.id ?? String(args.gateway_id)),
+        );
+        const handle = await context.writeResource("custom_domain", id, result);
+        context.logger.info("Created custom_domain {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_aig_config_fetch_custom_domain: {
+      description: "Get a custom domain",
+      arguments: z.object({
+        gateway_id: z.string(),
+        hostname: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/custom-domains/${args.hostname}`,
+        );
+
+        const handle = await context.writeResource(
+          "aig_config_fetch_custom_domain",
+          sanitizeInstanceName(String(args.hostname)),
+          result,
+        );
+        context.logger.info("Fetched aig_config_fetch_custom_domain", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_custom_domain: {
+      description: "Delete a custom domain",
+      arguments: z.object({
+        gateway_id: z.string(),
+        hostname: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/custom-domains/${args.hostname}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.hostname });
+        return { dataHandles: [] };
+      },
+    },
     list_dataset: {
-      description: "List Datasets",
+      description: "List datasets (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         page: z.number().optional(),
@@ -5855,7 +5099,7 @@ export const model = {
       },
     },
     create_dataset: {
-      description: "Create a new Dataset",
+      description: "Create a dataset (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         enable: z.boolean(),
@@ -5919,7 +5163,7 @@ export const model = {
       },
     },
     get_aig_config_fetch_dataset: {
-      description: "Fetch a Dataset",
+      description: "Get a dataset (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -5955,7 +5199,7 @@ export const model = {
       },
     },
     update_dataset: {
-      description: "Update a Dataset",
+      description: "Update a dataset (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -6020,7 +5264,7 @@ export const model = {
       },
     },
     delete_dataset: {
-      description: "Delete a Dataset",
+      description: "Delete a dataset (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -6052,7 +5296,7 @@ export const model = {
       },
     },
     list_evaluations: {
-      description: "List Evaluations",
+      description: "List evaluations (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         page: z.number().optional(),
@@ -6113,7 +5357,7 @@ export const model = {
       },
     },
     create_evaluations: {
-      description: "Create a new Evaluation",
+      description: "Create an evaluation (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         dataset_ids: z.array(z.string()),
@@ -6159,7 +5403,7 @@ export const model = {
       },
     },
     get_aig_config_fetch_evaluations: {
-      description: "Fetch a Evaluation",
+      description: "Get an evaluation (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -6195,7 +5439,7 @@ export const model = {
       },
     },
     delete_evaluations: {
-      description: "Delete a Evaluation",
+      description: "Delete an evaluation (deprecated)",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -6535,8 +5779,247 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    list_model_aliases: {
+      description: "List model aliases",
+      arguments: z.object({
+        gateway_id: z.string(),
+        page: z.number().optional(),
+        per_page: z.number().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/model_aliases`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("model_aliases", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} model_aliases", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_model_alias: {
+      description: "Create a model alias",
+      arguments: z.object({
+        gateway_id: z.string(),
+        models: z.array(z.object({
+          model: z.string().min(1).max(256),
+          providers: z.array(
+            z.string().min(1).max(64).regex(new RegExp("^[a-z0-9-]+$")),
+          ).optional(),
+        })),
+        name: z.string().min(1).max(64).regex(
+          new RegExp("^[a-z0-9]+(?:[._-][a-z0-9]+)*$"),
+        ),
+        routing: z.object({
+          algorithm: z.enum(["preferred", "smart"]).optional(),
+          mode: z.enum(["cost", "best"]).optional(),
+        }).nullable().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["gateway_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/model_aliases`,
+          body,
+        );
+
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(created?.id ?? String(args.gateway_id)),
+        );
+        const handle = await context.writeResource("model_alias", id, result);
+        context.logger.info("Created model_alias {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_model_alias: {
+      description: "Get a model alias",
+      arguments: z.object({
+        gateway_id: z.string(),
+        id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/model_aliases/${args.id}`,
+        );
+
+        const handle = await context.writeResource(
+          "model_alias",
+          sanitizeInstanceName(String(args.id)),
+          result,
+        );
+        context.logger.info("Fetched model_alias", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_model_alias: {
+      description: "Update a model alias",
+      arguments: z.object({
+        gateway_id: z.string(),
+        id: z.string(),
+        models: z.array(z.object({
+          model: z.string().min(1).max(256),
+          providers: z.array(
+            z.string().min(1).max(64).regex(new RegExp("^[a-z0-9-]+$")),
+          ).optional(),
+        })),
+        name: z.string().min(1).max(64).regex(
+          new RegExp("^[a-z0-9]+(?:[._-][a-z0-9]+)*$"),
+        ),
+        routing: z.object({
+          algorithm: z.enum(["preferred", "smart"]).optional(),
+          mode: z.enum(["cost", "best"]).optional(),
+        }).nullable().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["gateway_id", "id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/model_aliases/${args.id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "model_alias",
+          sanitizeInstanceName(String(args.id)),
+          result,
+        );
+        context.logger.info("Updated model_alias", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_model_alias: {
+      description: "Delete a model alias",
+      arguments: z.object({
+        gateway_id: z.string(),
+        id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/model_aliases/${args.id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.id });
+        return { dataHandles: [] };
+      },
+    },
     list_providers: {
-      description: "List Provider Configs",
+      description: "List provider keys",
       arguments: z.object({
         gateway_id: z.string(),
         page: z.number().optional(),
@@ -6594,7 +6077,7 @@ export const model = {
       },
     },
     create_providers: {
-      description: "Create a new Provider Configs",
+      description: "Store a provider key",
       arguments: z.object({
         gateway_id: z.string(),
         alias: z.string(),
@@ -6603,7 +6086,7 @@ export const model = {
         rate_limit: z.number().optional(),
         rate_limit_period: z.number().optional(),
         secret: z.string().optional().describe(
-          "Secret: pass a vault.get expression, never a literal value.",
+          "Provider API key to store in the Secrets Store configured on the gateway. Secret: pass a vault.get expression, never a literal value.",
         ).meta({ sensitive: true }),
         secret_id: z.string().optional(),
       }),
@@ -6645,13 +6128,49 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    get_aig_config_fetch_providers: {
+      description: "Get a provider key",
+      arguments: z.object({
+        gateway_id: z.string(),
+        id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/provider_configs/${args.id}`,
+        );
+
+        const handle = await context.writeResource(
+          "aig_config_fetch_providers",
+          sanitizeInstanceName(String(args.id)),
+          result,
+        );
+        context.logger.info("Fetched aig_config_fetch_providers", {});
+        return { dataHandles: [handle] };
+      },
+    },
     update_providers: {
-      description: "Update a Provider Configs",
+      description: "Rotate a provider key",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
         secret: z.string().describe(
-          "Secret: pass a vault.get expression, never a literal value.",
+          "Provider API key to store in the Secrets Store configured on the gateway. Secret: pass a vault.get expression, never a literal value.",
         ).meta({ sensitive: true }),
       }),
       execute: async (
@@ -6693,7 +6212,7 @@ export const model = {
       },
     },
     delete_providers: {
-      description: "Delete a Provider Configs",
+      description: "Delete a provider key",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -6724,8 +6243,52 @@ export const model = {
         return { dataHandles: [] };
       },
     },
+    aig_config_test_providers: {
+      description: "Check stored provider credentials",
+      arguments: z.object({
+        gateway_id: z.string(),
+        id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["gateway_id", "id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/provider_configs/${args.id}/test`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "aig_config_test_providers",
+          "aig_config_test_providers-current",
+          result ?? {},
+        );
+        context.logger.info("Executed aig_config_test_providers", {});
+        return { dataHandles: [handle] };
+      },
+    },
     list_gateway_dynamic_routes: {
-      description: "List all AI Gateway Dynamic Routes.",
+      description: "List dynamic routes",
       arguments: z.object({
         gateway_id: z.string(),
         page: z.number().optional().describe("Page number"),
@@ -6762,7 +6325,7 @@ export const model = {
       },
     },
     create_aig_config_post_gateway_dynamic_route: {
-      description: "Create a new AI Gateway Dynamic Route.",
+      description: "Create a dynamic route",
       arguments: z.object({
         gateway_id: z.string(),
         elements: z.array(z.union([
@@ -6847,7 +6410,7 @@ export const model = {
             type: z.enum(["end"]),
           }),
         ])),
-        name: z.string(),
+        name: z.string().min(1),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6895,7 +6458,7 @@ export const model = {
       },
     },
     get_gateway_dynamic_route: {
-      description: "Get an AI Gateway Dynamic Route.",
+      description: "Get a dynamic route",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -6931,11 +6494,11 @@ export const model = {
       },
     },
     update_gateway_dynamic_route: {
-      description: "Update an AI Gateway Dynamic Route.",
+      description: "Rename a dynamic route",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
-        name: z.string(),
+        name: z.string().min(1),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6976,7 +6539,7 @@ export const model = {
       },
     },
     delete_gateway_dynamic_route: {
-      description: "Delete an AI Gateway Dynamic Route.",
+      description: "Delete a dynamic route",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -7008,10 +6571,14 @@ export const model = {
       },
     },
     list_gateway_dynamic_route_deployments: {
-      description: "List all AI Gateway Dynamic Route Deployments.",
+      description: "List dynamic route deployments",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
+        page: z.number().optional().describe("Page number"),
+        per_page: z.number().optional().describe(
+          "Number of deployments per page",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7047,7 +6614,7 @@ export const model = {
       },
     },
     create_aig_config_post_gateway_dynamic_route_deployment: {
-      description: "Create a new AI Gateway Dynamic Route Deployment.",
+      description: "Deploy a dynamic route version",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -7104,10 +6671,12 @@ export const model = {
       },
     },
     list_gateway_dynamic_route_versions: {
-      description: "List all AI Gateway Dynamic Route Versions.",
+      description: "List dynamic route versions",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
+        page: z.number().optional().describe("Page number"),
+        per_page: z.number().optional().describe("Number of versions per page"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7140,7 +6709,7 @@ export const model = {
       },
     },
     create_aig_config_post_gateway_dynamic_route_version: {
-      description: "Create a new AI Gateway Dynamic Route Version.",
+      description: "Create a dynamic route version",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -7278,7 +6847,7 @@ export const model = {
       },
     },
     get_gateway_dynamic_route_version: {
-      description: "Get an AI Gateway Dynamic Route Version.",
+      description: "Get a dynamic route version",
       arguments: z.object({
         gateway_id: z.string(),
         id: z.string(),
@@ -7351,7 +6920,7 @@ export const model = {
       },
     },
     get_aig_config_fetch_gateway: {
-      description: "Fetch a Gateway",
+      description: "Get a gateway",
       arguments: z.object({
         id: z.string(),
       }),
@@ -7386,10 +6955,15 @@ export const model = {
       },
     },
     update_gateway: {
-      description: "Update a Gateway",
+      description: "Update a gateway",
       arguments: z.object({
         id: z.string(),
-        authentication: z.boolean().optional(),
+        authentication: z.boolean().optional().describe(
+          "Require authentication for gateway access. New gateways must have authenticat...",
+        ),
+        byok_only: z.boolean().optional().describe(
+          "Requires customer-provided provider credentials and prevents fallback to Unif...",
+        ),
         cache_invalidate_on_update: z.boolean(),
         cache_ttl: z.number().int().min(0).nullable(),
         collect_logs: z.boolean(),
@@ -7418,6 +6992,7 @@ export const model = {
             S11: z.enum(["FLAG", "BLOCK"]).optional(),
             S12: z.enum(["FLAG", "BLOCK"]).optional(),
             S13: z.enum(["FLAG", "BLOCK"]).optional(),
+            S14: z.enum(["FLAG", "BLOCK"]).optional(),
             S2: z.enum(["FLAG", "BLOCK"]).optional(),
             S3: z.enum(["FLAG", "BLOCK"]).optional(),
             S4: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -7434,6 +7009,7 @@ export const model = {
             S11: z.enum(["FLAG", "BLOCK"]).optional(),
             S12: z.enum(["FLAG", "BLOCK"]).optional(),
             S13: z.enum(["FLAG", "BLOCK"]).optional(),
+            S14: z.enum(["FLAG", "BLOCK"]).optional(),
             S2: z.enum(["FLAG", "BLOCK"]).optional(),
             S3: z.enum(["FLAG", "BLOCK"]).optional(),
             S4: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -7444,12 +7020,16 @@ export const model = {
             S9: z.enum(["FLAG", "BLOCK"]).optional(),
           }),
         }).nullable().optional(),
+        log_classification: z.boolean().optional(),
         log_management: z.number().int().min(10000).max(10000000).nullable()
           .optional(),
         log_management_strategy: z.enum(["STOP_INSERTING", "DELETE_OLDEST"])
           .nullable().optional(),
         logpush: z.boolean().optional(),
         logpush_public_key: z.string().min(16).max(1024).nullable().optional(),
+        multiprovider_enabled: z.boolean().optional().describe(
+          "Lets requests to a model use every provider that serves it. When off, a model...",
+        ),
         otel: z.array(z.object({
           authorization: z.string().max(256).optional(),
           content_type: z.enum(["json", "protobuf"]).optional().default("json"),
@@ -7462,8 +7042,8 @@ export const model = {
           .optional(),
         retry_backoff: z.enum(["constant", "linear", "exponential"]).nullable()
           .optional().describe("Backoff strategy for retry delays"),
-        retry_delay: z.number().int().min(0).max(5000).nullable().optional()
-          .describe("Delay between retry attempts in milliseconds (0-5000)"),
+        retry_delay: z.number().int().min(0).max(60000).nullable().optional()
+          .describe("Delay between retry attempts in milliseconds (0-60000)"),
         retry_max_attempts: z.number().int().min(1).max(5).nullable().optional()
           .describe(
             "Maximum number of retry attempts for failed requests (1-5)",
@@ -7473,7 +7053,7 @@ export const model = {
           rules: z.array(z.object({
             enabled: z.boolean().optional().default(true),
             id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$"))
-              .optional().default("f584b3b9"),
+              .optional().default("00000000"),
             limit: z.number().min(0),
             limitType: z.enum(["cost"]),
             metadata: z.record(
@@ -7502,16 +7082,19 @@ export const model = {
             window: z.number().int().min(0),
           })).optional().default([]),
         }).nullable().optional(),
-        store_id: z.string().nullable().optional(),
+        store_id: z.string().nullable().optional().describe(
+          "Secrets Store used by this gateway. Omit on update to keep the current store....",
+        ),
         stripe: z.object({
           authorization: z.string(),
           usage_events: z.array(z.object({
             payload: z.string(),
           })),
         }).nullable().optional(),
-        workers_ai_billing_mode: z.enum(["postpaid"]).optional().describe(
-          "Controls how Workers AI inference calls routed through this gateway are bille...",
-        ),
+        workers_ai_billing_mode: z.enum(["postpaid", "unified"]).optional()
+          .describe(
+            "Controls how Workers AI inference calls routed through this gateway are bille...",
+          ),
         zdr: z.boolean().optional(),
       }),
       execute: async (
@@ -7553,7 +7136,7 @@ export const model = {
       },
     },
     delete_gateway: {
-      description: "Delete a Gateway",
+      description: "Delete a gateway",
       arguments: z.object({
         id: z.string(),
       }),
@@ -7583,24 +7166,11 @@ export const model = {
         return { dataHandles: [] };
       },
     },
-    list_instances: {
-      description: "List AI Search instances.",
-      arguments: z.object({
-        page: z.number().optional().describe("Page number (1-indexed)."),
-        per_page: z.number().optional().describe("Number of results per page."),
-        search: z.string().optional().describe(
-          "Filter instances whose id contains this string (case-insensitive).",
-        ),
-        namespace: z.string().optional().describe("Filter by namespace."),
-        order_by: z.enum(["created_at"]).optional().describe(
-          "Field to order results by.",
-        ),
-        order_by_direction: z.enum(["asc", "desc"]).optional().describe(
-          "Order direction.",
-        ),
-      }),
+    get_logging_state: {
+      description: "Get AI Gateway logging state",
+      arguments: z.object({}),
       execute: async (
-        args: Record<string, unknown>,
+        _args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -7614,265 +7184,24 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set(["page", "per_page"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
+        const result = await cfApi<Record<string, unknown>>(
           apiToken,
-          `/accounts/${accountId}/ai-search/instances`,
-          params,
+          "GET",
+          `/accounts/${accountId}/ai-gateway/logging-state`,
         );
 
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource("instances", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
-
-        context.logger.info("Found {count} instances", {
-          count: results.length,
-        });
+        const handle = await context.writeResource(
+          "logging_state",
+          "logging_state-current",
+          result,
+        );
+        context.logger.info("Fetched logging_state", {});
         return { dataHandles: [handle] };
       },
     },
-    create_instance: {
-      description: "Create an AI Search instance.",
-      arguments: z.object({
-        ai_gateway_id: z.string().nullable().optional(),
-        ai_search_model: z.union([
-          z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-          z.literal("@cf/zai-org/glm-4.7-flash"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-          z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-          z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-          z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-          z.literal("@cf/moonshotai/kimi-k2-instruct"),
-          z.literal("@cf/google/gemma-3-12b-it"),
-          z.literal("@cf/google/gemma-4-26b-a4b-it"),
-          z.literal("@cf/moonshotai/kimi-k2.5"),
-          z.literal("anthropic/claude-3-7-sonnet"),
-          z.literal("anthropic/claude-sonnet-4"),
-          z.literal("anthropic/claude-opus-4"),
-          z.literal("anthropic/claude-3-5-haiku"),
-          z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-          z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-          z.literal("cerebras/llama-3.3-70b"),
-          z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-          z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-          z.literal("cerebras/gpt-oss-120b"),
-          z.literal("google-ai-studio/gemini-2.5-flash"),
-          z.literal("google-ai-studio/gemini-2.5-pro"),
-          z.literal("grok/grok-4"),
-          z.literal("groq/llama-3.3-70b-versatile"),
-          z.literal("groq/llama-3.1-8b-instant"),
-          z.literal("openai/gpt-5"),
-          z.literal("openai/gpt-5-mini"),
-          z.literal("openai/gpt-5-nano"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        cache: z.boolean().optional(),
-        cache_threshold: z.enum([
-          "super_strict_match",
-          "close_enough",
-          "flexible_friend",
-          "anything_goes",
-        ]).optional(),
-        cache_ttl: z.union([
-          z.union([z.literal(600)]),
-          z.union([z.literal(1800)]),
-          z.union([z.literal(3600)]),
-          z.union([z.literal(7200)]),
-          z.union([z.literal(21600)]),
-          z.union([z.literal(43200)]),
-          z.union([z.literal(86400)]),
-          z.union([z.literal(172800)]),
-          z.union([z.literal(259200)]),
-          z.union([z.literal(518400)]),
-        ]).optional().describe(
-          "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (...",
-        ),
-        chunk: z.boolean().optional(),
-        chunk_overlap: z.number().int().min(0).max(30).optional(),
-        chunk_size: z.number().int().min(64).optional(),
-        custom_metadata: z.array(z.object({
-          data_type: z.enum(["text", "number", "boolean", "datetime"]),
-          field_name: z.string().min(1).max(64),
-        })).optional(),
-        embedding_model: z.union([
-          z.literal("@cf/qwen/qwen3-embedding-0.6b"),
-          z.literal("@cf/qwen/qwen3-vl-embedding-2b"),
-          z.literal("@cf/baai/bge-m3"),
-          z.literal("@cf/baai/bge-large-en-v1.5"),
-          z.literal("@cf/google/embeddinggemma-300m"),
-          z.literal("google-ai-studio/gemini-embedding-001"),
-          z.literal("google-ai-studio/gemini-embedding-2-preview"),
-          z.literal("google-ai-studio/gemini-embedding-2"),
-          z.literal("openai/text-embedding-3-small"),
-          z.literal("openai/text-embedding-3-large"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        fusion_method: z.enum(["max", "rrf"]).optional(),
-        hybrid_search_enabled: z.boolean().optional().describe(
-          "Deprecated — use index_method instead.",
-        ),
-        index_method: z.object({
-          keyword: z.boolean(),
-          vector: z.boolean(),
-        }).optional().describe(
-          "Controls which storage backends are used during indexing. Defaults to vector-...",
-        ),
-        indexing_options: z.object({
-          keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
-            "porter",
-          ),
-        }).nullable().optional(),
-        max_num_results: z.number().int().min(1).max(50).optional(),
-        metadata: z.object({
-          created_from_aisearch_wizard: z.boolean().optional(),
-          worker_domain: z.string().optional(),
-        }).optional(),
-        public_endpoint_params: z.object({
-          authorized_hosts: z.array(z.string()).optional(),
-          chat_completions_endpoint: z.object({
-            disabled: z.boolean().optional().default(false),
-          }).optional(),
-          custom_domains: z.array(z.string().min(1).max(253)).nullable()
-            .optional(),
-          enabled: z.boolean().optional().default(false),
-          mcp: z.object({
-            description: z.string().optional().default(
-              "Finds exactly what you're looking for",
-            ),
-            disabled: z.boolean().optional().default(false),
-          }).optional(),
-          rate_limit: z.object({
-            period_ms: z.number().int().min(60000).max(3600000).optional(),
-            requests: z.number().int().min(1).optional(),
-            technique: z.enum(["fixed", "sliding"]).optional(),
-          }).optional(),
-          search_endpoint: z.object({
-            disabled: z.boolean().optional().default(false),
-          }).optional(),
-        }).optional(),
-        reranking: z.boolean().optional(),
-        reranking_model: z.union([
-          z.literal("@cf/baai/bge-reranker-base"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        retrieval_options: z.object({
-          boost_by: z.array(z.object({
-            direction: z.enum(["asc", "desc", "exists", "not_exists"])
-              .optional(),
-            field: z.string().min(1).max(64),
-          })).optional(),
-          keyword_match_mode: z.enum(["and", "or"]).optional(),
-        }).nullable().optional(),
-        rewrite_model: z.union([
-          z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-          z.literal("@cf/zai-org/glm-4.7-flash"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-          z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-          z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-          z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-          z.literal("@cf/moonshotai/kimi-k2-instruct"),
-          z.literal("@cf/google/gemma-3-12b-it"),
-          z.literal("@cf/google/gemma-4-26b-a4b-it"),
-          z.literal("@cf/moonshotai/kimi-k2.5"),
-          z.literal("anthropic/claude-3-7-sonnet"),
-          z.literal("anthropic/claude-sonnet-4"),
-          z.literal("anthropic/claude-opus-4"),
-          z.literal("anthropic/claude-3-5-haiku"),
-          z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-          z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-          z.literal("cerebras/llama-3.3-70b"),
-          z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-          z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-          z.literal("cerebras/gpt-oss-120b"),
-          z.literal("google-ai-studio/gemini-2.5-flash"),
-          z.literal("google-ai-studio/gemini-2.5-pro"),
-          z.literal("grok/grok-4"),
-          z.literal("groq/llama-3.3-70b-versatile"),
-          z.literal("groq/llama-3.1-8b-instant"),
-          z.literal("openai/gpt-5"),
-          z.literal("openai/gpt-5-mini"),
-          z.literal("openai/gpt-5-nano"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        rewrite_query: z.boolean().optional(),
-        score_threshold: z.number().min(0).max(1).optional(),
-        source: z.string().nullable().optional(),
-        source_params: z.object({
-          exclude_items: z.array(
-            z.string().max(512).regex(
-              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
-            ),
-          ).optional(),
-          include_items: z.array(
-            z.string().max(512).regex(
-              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
-            ),
-          ).optional(),
-          prefix: z.string().optional(),
-          r2_jurisdiction: z.string().optional().default("default"),
-          web_crawler: z.object({
-            parse_options: z.object({
-              content_selector: z.array(z.object({
-                path: z.string().min(1).max(200),
-                selector: z.string().min(1).max(200),
-              })).optional(),
-              include_headers: z.record(
-                z.string(),
-                z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
-              ).optional(),
-              include_images: z.boolean().optional().default(false),
-              specific_sitemaps: z.array(z.string()).optional(),
-              use_browser_rendering: z.boolean().optional().default(true),
-            }).optional(),
-            parse_type: z.enum(["sitemap", "crawl"]).optional().default(
-              "sitemap",
-            ),
-          }).optional().default({ "parse_type": "sitemap" }),
-        }).nullable().optional(),
-        sync_interval: z.union([
-          z.union([z.literal(900)]),
-          z.union([z.literal(1800)]),
-          z.union([z.literal(3600)]),
-          z.union([z.literal(7200)]),
-          z.union([z.literal(14400)]),
-          z.union([z.literal(21600)]),
-          z.union([z.literal(43200)]),
-          z.union([z.literal(86400)]),
-        ]).optional().describe(
-          "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 18...",
-        ),
-        token_id: z.string().optional(),
-        type: z.union([
-          z.literal("r2"),
-          z.literal("web-crawler"),
-          z.literal(null),
-        ]).nullable().optional(),
-      }),
+    patch_logging_state: {
+      description: "Migrate AI Gateway logging to Workers Observability",
+      arguments: z.object({}),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -7893,995 +7222,22 @@ export const model = {
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
-          "POST",
-          `/accounts/${accountId}/ai-search/instances`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
-        );
-        const handle = await context.writeResource("instance", id, result);
-        context.logger.info("Created instance {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_ai_search_fetch_instance: {
-      description: "Get an AI Search instance.",
-      arguments: z.object({
-        id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-search/instances/${args.id}`,
-        );
-
-        const handle = await context.writeResource(
-          "ai_search_fetch_instance",
-          sanitizeInstanceName(String(args.id)),
-          result,
-        );
-        context.logger.info("Fetched ai_search_fetch_instance", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    update_instance: {
-      description: "Update an AI Search instance.",
-      arguments: z.object({
-        id: z.string(),
-        ai_gateway_id: z.string().nullable().optional(),
-        ai_search_model: z.union([
-          z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-          z.literal("@cf/zai-org/glm-4.7-flash"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-          z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-          z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-          z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-          z.literal("@cf/moonshotai/kimi-k2-instruct"),
-          z.literal("@cf/google/gemma-3-12b-it"),
-          z.literal("@cf/google/gemma-4-26b-a4b-it"),
-          z.literal("@cf/moonshotai/kimi-k2.5"),
-          z.literal("anthropic/claude-3-7-sonnet"),
-          z.literal("anthropic/claude-sonnet-4"),
-          z.literal("anthropic/claude-opus-4"),
-          z.literal("anthropic/claude-3-5-haiku"),
-          z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-          z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-          z.literal("cerebras/llama-3.3-70b"),
-          z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-          z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-          z.literal("cerebras/gpt-oss-120b"),
-          z.literal("google-ai-studio/gemini-2.5-flash"),
-          z.literal("google-ai-studio/gemini-2.5-pro"),
-          z.literal("grok/grok-4"),
-          z.literal("groq/llama-3.3-70b-versatile"),
-          z.literal("groq/llama-3.1-8b-instant"),
-          z.literal("openai/gpt-5"),
-          z.literal("openai/gpt-5-mini"),
-          z.literal("openai/gpt-5-nano"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        cache: z.boolean().optional(),
-        cache_threshold: z.enum([
-          "super_strict_match",
-          "close_enough",
-          "flexible_friend",
-          "anything_goes",
-        ]).optional(),
-        cache_ttl: z.union([
-          z.union([z.literal(600)]),
-          z.union([z.literal(1800)]),
-          z.union([z.literal(3600)]),
-          z.union([z.literal(7200)]),
-          z.union([z.literal(21600)]),
-          z.union([z.literal(43200)]),
-          z.union([z.literal(86400)]),
-          z.union([z.literal(172800)]),
-          z.union([z.literal(259200)]),
-          z.union([z.literal(518400)]),
-        ]).optional().describe(
-          "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (...",
-        ),
-        chunk: z.boolean().optional(),
-        chunk_overlap: z.number().int().min(0).max(30).optional(),
-        chunk_size: z.number().int().min(64).optional(),
-        custom_metadata: z.array(z.object({
-          data_type: z.enum(["text", "number", "boolean", "datetime"]),
-          field_name: z.string().min(1).max(64),
-        })).optional(),
-        embedding_model: z.union([
-          z.literal("@cf/qwen/qwen3-embedding-0.6b"),
-          z.literal("@cf/qwen/qwen3-vl-embedding-2b"),
-          z.literal("@cf/baai/bge-m3"),
-          z.literal("@cf/baai/bge-large-en-v1.5"),
-          z.literal("@cf/google/embeddinggemma-300m"),
-          z.literal("google-ai-studio/gemini-embedding-001"),
-          z.literal("google-ai-studio/gemini-embedding-2-preview"),
-          z.literal("google-ai-studio/gemini-embedding-2"),
-          z.literal("openai/text-embedding-3-small"),
-          z.literal("openai/text-embedding-3-large"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        fusion_method: z.enum(["max", "rrf"]).optional(),
-        index_method: z.object({
-          keyword: z.boolean(),
-          vector: z.boolean(),
-        }).optional().describe(
-          "Controls which storage backends are used during indexing. Defaults to vector-...",
-        ),
-        indexing_options: z.object({
-          keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
-            "porter",
-          ),
-        }).nullable().optional(),
-        max_num_results: z.number().int().min(1).max(50).optional(),
-        metadata: z.object({
-          created_from_aisearch_wizard: z.boolean().optional(),
-          worker_domain: z.string().optional(),
-        }).optional(),
-        paused: z.boolean().optional(),
-        public_endpoint_params: z.object({
-          authorized_hosts: z.array(z.string()).optional(),
-          chat_completions_endpoint: z.object({
-            disabled: z.boolean().optional().default(false),
-          }).optional(),
-          custom_domains: z.array(z.string().min(1).max(253)).nullable()
-            .optional(),
-          enabled: z.boolean().optional().default(false),
-          mcp: z.object({
-            description: z.string().optional().default(
-              "Finds exactly what you're looking for",
-            ),
-            disabled: z.boolean().optional().default(false),
-          }).optional(),
-          rate_limit: z.object({
-            period_ms: z.number().int().min(60000).max(3600000).optional(),
-            requests: z.number().int().min(1).optional(),
-            technique: z.enum(["fixed", "sliding"]).optional(),
-          }).optional(),
-          search_endpoint: z.object({
-            disabled: z.boolean().optional().default(false),
-          }).optional(),
-        }).optional(),
-        reranking: z.boolean().optional(),
-        reranking_model: z.union([
-          z.literal("@cf/baai/bge-reranker-base"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        retrieval_options: z.object({
-          boost_by: z.array(z.object({
-            direction: z.enum(["asc", "desc", "exists", "not_exists"])
-              .optional(),
-            field: z.string().min(1).max(64),
-          })).optional(),
-          keyword_match_mode: z.enum(["and", "or"]).optional(),
-        }).nullable().optional(),
-        rewrite_model: z.union([
-          z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-          z.literal("@cf/zai-org/glm-4.7-flash"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-          z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-          z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-          z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-          z.literal("@cf/moonshotai/kimi-k2-instruct"),
-          z.literal("@cf/google/gemma-3-12b-it"),
-          z.literal("@cf/google/gemma-4-26b-a4b-it"),
-          z.literal("@cf/moonshotai/kimi-k2.5"),
-          z.literal("anthropic/claude-3-7-sonnet"),
-          z.literal("anthropic/claude-sonnet-4"),
-          z.literal("anthropic/claude-opus-4"),
-          z.literal("anthropic/claude-3-5-haiku"),
-          z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-          z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-          z.literal("cerebras/llama-3.3-70b"),
-          z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-          z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-          z.literal("cerebras/gpt-oss-120b"),
-          z.literal("google-ai-studio/gemini-2.5-flash"),
-          z.literal("google-ai-studio/gemini-2.5-pro"),
-          z.literal("grok/grok-4"),
-          z.literal("groq/llama-3.3-70b-versatile"),
-          z.literal("groq/llama-3.1-8b-instant"),
-          z.literal("openai/gpt-5"),
-          z.literal("openai/gpt-5-mini"),
-          z.literal("openai/gpt-5-nano"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        rewrite_query: z.boolean().optional(),
-        score_threshold: z.number().min(0).max(1).optional(),
-        source: z.string().nullable().optional(),
-        source_params: z.object({
-          exclude_items: z.array(
-            z.string().max(512).regex(
-              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
-            ),
-          ).optional(),
-          include_items: z.array(
-            z.string().max(512).regex(
-              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
-            ),
-          ).optional(),
-          prefix: z.string().optional(),
-          r2_jurisdiction: z.string().optional().default("default"),
-          web_crawler: z.object({
-            parse_options: z.object({
-              content_selector: z.array(z.object({
-                path: z.string().min(1).max(200),
-                selector: z.string().min(1).max(200),
-              })).optional(),
-              include_headers: z.record(
-                z.string(),
-                z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
-              ).optional(),
-              include_images: z.boolean().optional().default(false),
-              specific_sitemaps: z.array(z.string()).optional(),
-              use_browser_rendering: z.boolean().optional().default(true),
-            }).optional(),
-            parse_type: z.enum(["sitemap", "crawl"]).optional().default(
-              "sitemap",
-            ),
-          }).optional().default({ "parse_type": "sitemap" }),
-        }).nullable().optional(),
-        summarization: z.boolean().optional(),
-        summarization_model: z.union([
-          z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-          z.literal("@cf/zai-org/glm-4.7-flash"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fast"),
-          z.literal("@cf/meta/llama-3.1-8b-instruct-fp8"),
-          z.literal("@cf/meta/llama-4-scout-17b-16e-instruct"),
-          z.literal("@cf/qwen/qwen3-30b-a3b-fp8"),
-          z.literal("@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"),
-          z.literal("@cf/moonshotai/kimi-k2-instruct"),
-          z.literal("@cf/google/gemma-3-12b-it"),
-          z.literal("@cf/google/gemma-4-26b-a4b-it"),
-          z.literal("@cf/moonshotai/kimi-k2.5"),
-          z.literal("anthropic/claude-3-7-sonnet"),
-          z.literal("anthropic/claude-sonnet-4"),
-          z.literal("anthropic/claude-opus-4"),
-          z.literal("anthropic/claude-3-5-haiku"),
-          z.literal("cerebras/qwen-3-235b-a22b-instruct"),
-          z.literal("cerebras/qwen-3-235b-a22b-thinking"),
-          z.literal("cerebras/llama-3.3-70b"),
-          z.literal("cerebras/llama-4-maverick-17b-128e-instruct"),
-          z.literal("cerebras/llama-4-scout-17b-16e-instruct"),
-          z.literal("cerebras/gpt-oss-120b"),
-          z.literal("google-ai-studio/gemini-2.5-flash"),
-          z.literal("google-ai-studio/gemini-2.5-pro"),
-          z.literal("grok/grok-4"),
-          z.literal("groq/llama-3.3-70b-versatile"),
-          z.literal("groq/llama-3.1-8b-instant"),
-          z.literal("openai/gpt-5"),
-          z.literal("openai/gpt-5-mini"),
-          z.literal("openai/gpt-5-nano"),
-          z.literal(""),
-          z.literal(null),
-        ]).nullable().optional(),
-        sync_interval: z.union([
-          z.union([z.literal(900)]),
-          z.union([z.literal(1800)]),
-          z.union([z.literal(3600)]),
-          z.union([z.literal(7200)]),
-          z.union([z.literal(14400)]),
-          z.union([z.literal(21600)]),
-          z.union([z.literal(43200)]),
-          z.union([z.literal(86400)]),
-        ]).optional().describe(
-          "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 18...",
-        ),
-        system_prompt_ai_search: z.string().nullable().optional(),
-        system_prompt_index_summarization: z.string().nullable().optional(),
-        system_prompt_rewrite_query: z.string().nullable().optional(),
-        token_id: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/ai-search/instances/${args.id}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "instance",
-          sanitizeInstanceName(String(args.id)),
-          result,
-        );
-        context.logger.info("Updated instance", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    delete_instance: {
-      description: "Delete an AI Search instance.",
-      arguments: z.object({
-        id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/ai-search/instances/${args.id}`,
-        );
-
-        context.logger.info("Deleted resource {id}", { id: args.id });
-        return { dataHandles: [] };
-      },
-    },
-    create_ai_search_instance_chat_completion: {
-      description: "Chat Completions",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        ai_search_options: z.object({
-          cache: z.object({
-            cache_threshold: z.enum([
-              "super_strict_match",
-              "close_enough",
-              "flexible_friend",
-              "anything_goes",
-            ]).optional(),
-            enabled: z.boolean().optional(),
-          }).optional(),
-          query_rewrite: z.object({
-            enabled: z.boolean().optional(),
-            model: z.union([
-              z.enum([
-                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                "@cf/zai-org/glm-4.7-flash",
-                "@cf/meta/llama-3.1-8b-instruct-fast",
-                "@cf/meta/llama-3.1-8b-instruct-fp8",
-                "@cf/meta/llama-4-scout-17b-16e-instruct",
-                "@cf/qwen/qwen3-30b-a3b-fp8",
-                "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                "@cf/moonshotai/kimi-k2-instruct",
-                "@cf/google/gemma-3-12b-it",
-                "@cf/google/gemma-4-26b-a4b-it",
-                "@cf/moonshotai/kimi-k2.5",
-                "anthropic/claude-3-7-sonnet",
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-opus-4",
-                "anthropic/claude-3-5-haiku",
-                "cerebras/qwen-3-235b-a22b-instruct",
-                "cerebras/qwen-3-235b-a22b-thinking",
-                "cerebras/llama-3.3-70b",
-                "cerebras/llama-4-maverick-17b-128e-instruct",
-                "cerebras/llama-4-scout-17b-16e-instruct",
-                "cerebras/gpt-oss-120b",
-                "google-ai-studio/gemini-2.5-flash",
-                "google-ai-studio/gemini-2.5-pro",
-                "grok/grok-4",
-                "groq/llama-3.3-70b-versatile",
-                "groq/llama-3.1-8b-instant",
-                "openai/gpt-5",
-                "openai/gpt-5-mini",
-                "openai/gpt-5-nano",
-              ]),
-              z.enum([""]),
-            ]).optional(),
-            rewrite_prompt: z.string().optional(),
-          }).optional(),
-          reranking: z.object({
-            enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            model: z.union([
-              z.enum(["@cf/baai/bge-reranker-base"]),
-              z.enum([""]),
-            ]).optional(),
-          }).optional(),
-          retrieval: z.object({
-            boost_by: z.array(z.object({
-              direction: z.enum(["asc", "desc", "exists", "not_exists"])
-                .optional(),
-              field: z.string().min(1).max(64),
-            })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional()
-              .default(0),
-            filters: z.record(z.string(), z.unknown()).optional(),
-            fusion_method: z.enum(["max", "rrf"]).optional(),
-            keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            max_num_results: z.number().int().min(1).max(50).optional().default(
-              10,
-            ),
-            retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional().default(true),
-          }).optional(),
-        }).optional(),
-        messages: z.array(z.object({
-          content: z.union([
-            z.string(),
-            z.array(z.union([
-              z.object({
-                text: z.string().min(1),
-                type: z.enum(["text"]),
-              }),
-              z.object({
-                image_url: z.object({
-                  url: z.unknown(),
-                }),
-                type: z.enum(["image_url"]),
-              }),
-            ])),
-            z.unknown().nullable(),
-          ]),
-          role: z.enum(["system", "developer", "user", "assistant", "tool"]),
-        })),
-        model: z.union([
-          z.enum([
-            "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-            "@cf/zai-org/glm-4.7-flash",
-            "@cf/meta/llama-3.1-8b-instruct-fast",
-            "@cf/meta/llama-3.1-8b-instruct-fp8",
-            "@cf/meta/llama-4-scout-17b-16e-instruct",
-            "@cf/qwen/qwen3-30b-a3b-fp8",
-            "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-            "@cf/moonshotai/kimi-k2-instruct",
-            "@cf/google/gemma-3-12b-it",
-            "@cf/google/gemma-4-26b-a4b-it",
-            "@cf/moonshotai/kimi-k2.5",
-            "anthropic/claude-3-7-sonnet",
-            "anthropic/claude-sonnet-4",
-            "anthropic/claude-opus-4",
-            "anthropic/claude-3-5-haiku",
-            "cerebras/qwen-3-235b-a22b-instruct",
-            "cerebras/qwen-3-235b-a22b-thinking",
-            "cerebras/llama-3.3-70b",
-            "cerebras/llama-4-maverick-17b-128e-instruct",
-            "cerebras/llama-4-scout-17b-16e-instruct",
-            "cerebras/gpt-oss-120b",
-            "google-ai-studio/gemini-2.5-flash",
-            "google-ai-studio/gemini-2.5-pro",
-            "grok/grok-4",
-            "groq/llama-3.3-70b-versatile",
-            "groq/llama-3.1-8b-instant",
-            "openai/gpt-5",
-            "openai/gpt-5-mini",
-            "openai/gpt-5-nano",
-          ]),
-          z.enum([""]),
-        ]).optional(),
-        stream: z.boolean().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai-search/instances/${args.id}/chat/completions`,
-          body,
-        );
-
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(String(created?.id ?? String(args.id)));
-        const handle = await context.writeResource(
-          "ai_search_instance_chat_completion",
-          id,
-          result,
-        );
-        context.logger.info("Created ai_search_instance_chat_completion {id}", {
-          id,
-        });
-        return { dataHandles: [handle] };
-      },
-    },
-    list_jobs: {
-      description: "List Jobs",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        page: z.number().optional(),
-        per_page: z.number().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set(["id", "page", "per_page"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/ai-search/instances/${args.id}/jobs`,
-          params,
-        );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource("jobs", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
-
-        context.logger.info("Found {count} jobs", { count: results.length });
-        return { dataHandles: [handle] };
-      },
-    },
-    create_job: {
-      description: "Create new job",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        description: z.string().max(255).optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai-search/instances/${args.id}/jobs`,
-          body,
-        );
-
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(String(created?.id ?? String(args.id)));
-        const handle = await context.writeResource("job", id, result);
-        context.logger.info("Created job {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_job: {
-      description: "Get a Job Details",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        job_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-search/instances/${args.id}/jobs/${args.job_id}`,
-        );
-
-        const handle = await context.writeResource(
-          "job",
-          sanitizeInstanceName(String(args.job_id)),
-          result,
-        );
-        context.logger.info("Fetched job", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    update_ai_search_instance_change_job_status: {
-      description: "Cancel an indexing job.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        job_id: z.string(),
-        action: z.enum(["cancel"]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id", "job_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
           "PATCH",
-          `/accounts/${accountId}/ai-search/instances/${args.id}/jobs/${args.job_id}`,
+          `/accounts/${accountId}/ai-gateway/logging-state`,
           body,
         );
 
         const handle = await context.writeResource(
-          "ai_search_instance_change_job_status",
-          sanitizeInstanceName(String(args.job_id)),
+          "patch_logging_state",
+          "updated",
           result,
         );
-        context.logger.info("Updated ai_search_instance_change_job_status", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    list_job_logs: {
-      description: "List Job Logs",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        job_id: z.string(),
-        page: z.number().optional(),
-        per_page: z.number().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set(["id", "job_id", "page", "per_page"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/ai-search/instances/${args.id}/jobs/${args.job_id}/logs`,
-          params,
-        );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource("job_logs", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
-
-        context.logger.info("Found {count} job_logs", {
-          count: results.length,
-        });
-        return { dataHandles: [handle] };
-      },
-    },
-    create_ai_search_instance_search: {
-      description: "Search",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        ai_search_options: z.object({
-          cache: z.object({
-            cache_threshold: z.enum([
-              "super_strict_match",
-              "close_enough",
-              "flexible_friend",
-              "anything_goes",
-            ]).optional(),
-            enabled: z.boolean().optional(),
-          }).optional(),
-          query_rewrite: z.object({
-            enabled: z.boolean().optional(),
-            model: z.union([
-              z.enum([
-                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                "@cf/zai-org/glm-4.7-flash",
-                "@cf/meta/llama-3.1-8b-instruct-fast",
-                "@cf/meta/llama-3.1-8b-instruct-fp8",
-                "@cf/meta/llama-4-scout-17b-16e-instruct",
-                "@cf/qwen/qwen3-30b-a3b-fp8",
-                "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                "@cf/moonshotai/kimi-k2-instruct",
-                "@cf/google/gemma-3-12b-it",
-                "@cf/google/gemma-4-26b-a4b-it",
-                "@cf/moonshotai/kimi-k2.5",
-                "anthropic/claude-3-7-sonnet",
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-opus-4",
-                "anthropic/claude-3-5-haiku",
-                "cerebras/qwen-3-235b-a22b-instruct",
-                "cerebras/qwen-3-235b-a22b-thinking",
-                "cerebras/llama-3.3-70b",
-                "cerebras/llama-4-maverick-17b-128e-instruct",
-                "cerebras/llama-4-scout-17b-16e-instruct",
-                "cerebras/gpt-oss-120b",
-                "google-ai-studio/gemini-2.5-flash",
-                "google-ai-studio/gemini-2.5-pro",
-                "grok/grok-4",
-                "groq/llama-3.3-70b-versatile",
-                "groq/llama-3.1-8b-instant",
-                "openai/gpt-5",
-                "openai/gpt-5-mini",
-                "openai/gpt-5-nano",
-              ]),
-              z.enum([""]),
-            ]).optional(),
-            rewrite_prompt: z.string().optional(),
-          }).optional(),
-          reranking: z.object({
-            enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            model: z.union([
-              z.enum(["@cf/baai/bge-reranker-base"]),
-              z.enum([""]),
-            ]).optional(),
-          }).optional(),
-          retrieval: z.object({
-            boost_by: z.array(z.object({
-              direction: z.enum(["asc", "desc", "exists", "not_exists"])
-                .optional(),
-              field: z.string().min(1).max(64),
-            })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional()
-              .default(0),
-            filters: z.record(z.string(), z.unknown()).optional(),
-            fusion_method: z.enum(["max", "rrf"]).optional(),
-            keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            max_num_results: z.number().int().min(1).max(50).optional().default(
-              10,
-            ),
-            retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional().default(true),
-          }).optional(),
-        }).optional(),
-        messages: z.array(z.object({
-          content: z.union([
-            z.string(),
-            z.array(z.union([
-              z.object({
-                text: z.string().min(1),
-                type: z.enum(["text"]),
-              }),
-              z.object({
-                image_url: z.object({
-                  url: z.unknown(),
-                }),
-                type: z.enum(["image_url"]),
-              }),
-            ])),
-            z.unknown().nullable(),
-          ]),
-          role: z.enum(["system", "developer", "user", "assistant", "tool"]),
-        })).optional().describe(
-          "OpenAI-compatible message array. For multimodal queries, set the last user me...",
-        ),
-        query: z.string().min(1).optional().describe(
-          "A simple text query string. Alternative to 'messages' — provide either this o...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai-search/instances/${args.id}/search`,
-          body,
-        );
-
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(String(created?.id ?? String(args.id)));
-        const handle = await context.writeResource(
-          "ai_search_instance_search",
-          id,
-          result,
-        );
-        context.logger.info("Created ai_search_instance_search {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_ai_search_stats: {
-      description: "Get instance statistics.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-search/instances/${args.id}/stats`,
-        );
-
-        const handle = await context.writeResource(
-          "ai_search_stats",
-          sanitizeInstanceName(String(args.id)),
-          result,
-        );
-        context.logger.info("Fetched ai_search_stats", {});
+        context.logger.info("Updated patch_logging_state", {});
         return { dataHandles: [handle] };
       },
     },
     list_namespaces: {
-      description: "List namespaces.",
+      description: "List namespaces",
       arguments: z.object({
         page: z.number().optional().describe("Page number (1-indexed)."),
         per_page: z.number().optional().describe("Number of results per page."),
@@ -8941,7 +7297,7 @@ export const model = {
       },
     },
     create_namespace: {
-      description: "Create namespace.",
+      description: "Create a namespace",
       arguments: z.object({
         description: z.string().max(256).nullable().optional().describe(
           "Optional description for the namespace. Max 256 characters.",
@@ -8949,6 +7305,35 @@ export const model = {
         name: z.string().regex(
           new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
         ),
+        public_endpoint_params: z.object({
+          authorized_hosts: z.array(z.string()).optional(),
+          chat_completions_endpoint: z.object({
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+          custom_domains: z.array(z.string().min(1).max(253)).nullable()
+            .optional(),
+          default_domain_enabled: z.boolean().optional().default(true),
+          enabled: z.boolean().optional().default(false),
+          instances_allowed: z.array(
+            z.string().min(1).max(64).regex(
+              new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+            ),
+          ).optional().default([]),
+          mcp: z.object({
+            description: z.string().optional().default(
+              "Finds exactly what you're looking for",
+            ),
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+          rate_limit: z.object({
+            period_ms: z.number().int().min(60000).max(3600000).optional(),
+            requests: z.number().int().min(1).optional(),
+            technique: z.enum(["fixed", "sliding"]).optional(),
+          }).optional(),
+          search_endpoint: z.object({
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+        }).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8990,8 +7375,1633 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    list_instances: {
+      description: "List AI Search instances.",
+      arguments: z.object({
+        namespace: z.string().describe("Namespace name."),
+        page: z.number().optional().describe("Page number (1-indexed)."),
+        per_page: z.number().optional().describe("Number of results per page."),
+        search: z.string().optional().describe(
+          "Filter instances whose id contains this string (case-insensitive).",
+        ),
+        hostname: z.string().optional().describe(
+          "Return only instances with this exact Search for Agents hostname (case-insensitive).",
+        ),
+        order_by: z.enum(["created_at"]).optional().describe(
+          "Field to order results by.",
+        ),
+        order_by_direction: z.enum(["asc", "desc"]).optional().describe(
+          "Order direction.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["namespace", "page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("instances", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} instances", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_instance: {
+      description: "Create an AI Search instance.",
+      arguments: z.object({
+        namespace: z.string().describe("Namespace name."),
+        ai_gateway_id: z.string().nullable().optional(),
+        ai_search_model: z.string().nullable().optional().describe(
+          "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Ch...",
+        ),
+        cache: z.boolean().optional(),
+        cache_threshold: z.enum([
+          "super_strict_match",
+          "close_enough",
+          "flexible_friend",
+          "anything_goes",
+        ]).optional(),
+        cache_ttl: z.union([
+          z.union([z.literal(600)]),
+          z.union([z.literal(1800)]),
+          z.union([z.literal(3600)]),
+          z.union([z.literal(7200)]),
+          z.union([z.literal(21600)]),
+          z.union([z.literal(43200)]),
+          z.union([z.literal(86400)]),
+          z.union([z.literal(172800)]),
+          z.union([z.literal(259200)]),
+          z.union([z.literal(518400)]),
+        ]).optional().describe(
+          "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (...",
+        ),
+        chunk: z.boolean().optional(),
+        chunk_overlap: z.number().int().min(0).max(30).optional(),
+        chunk_size: z.number().int().min(64).optional(),
+        custom_metadata: z.array(z.object({
+          data_type: z.enum(["text", "number", "boolean", "datetime"]),
+          field_name: z.string().min(1).max(64),
+        })).optional(),
+        embedding_model: z.string().nullable().optional(),
+        fusion_method: z.enum(["max", "rrf"]).optional(),
+        hybrid_search_enabled: z.boolean().optional().describe(
+          "Deprecated — use index_method instead. Defaults to true for new instances; se...",
+        ),
+        index_method: z.object({
+          keyword: z.boolean(),
+          vector: z.boolean(),
+        }).optional().describe(
+          "Controls which storage backends indexing uses. Defaults to vector and keyword...",
+        ),
+        indexing_options: z.object({
+          file_summary: z.boolean().optional().default(false),
+          keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+            "porter",
+          ),
+          use_ocr: z.boolean().optional().default(false),
+        }).nullable().optional(),
+        max_num_results: z.number().int().min(1).max(50).optional(),
+        metadata: z.object({
+          created_from_aisearch_wizard: z.boolean().optional(),
+          created_from_emdash_plugin: z.object({
+            type: z.enum(["native", "rest"]),
+            version: z.string(),
+          }).optional(),
+          worker_domain: z.string().optional(),
+        }).optional(),
+        public_endpoint_params: z.object({
+          authorized_hosts: z.array(z.string()).optional(),
+          chat_completions_endpoint: z.object({
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+          custom_domains: z.array(z.string().min(1).max(253)).nullable()
+            .optional(),
+          default_domain_enabled: z.boolean().optional().default(true),
+          enabled: z.boolean().optional().default(false),
+          mcp: z.object({
+            description: z.string().optional().default(
+              "Finds exactly what you're looking for",
+            ),
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+          rate_limit: z.object({
+            period_ms: z.number().int().min(60000).max(3600000).optional(),
+            requests: z.number().int().min(1).optional(),
+            technique: z.enum(["fixed", "sliding"]).optional(),
+          }).optional(),
+          search_endpoint: z.object({
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+        }).optional(),
+        reranking: z.boolean().optional(),
+        reranking_model: z.string().nullable().optional(),
+        retrieval_options: z.object({
+          boost_by: z.array(z.object({
+            direction: z.enum(["asc", "desc", "exists", "not_exists"])
+              .optional(),
+            field: z.string().min(1).max(64),
+          })).optional(),
+          keyword_match_mode: z.enum(["and", "or"]).optional(),
+        }).nullable().optional(),
+        rewrite_model: z.string().nullable().optional().describe(
+          "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Ch...",
+        ),
+        rewrite_query: z.boolean().optional(),
+        score_threshold: z.number().min(0).max(1).optional().describe(
+          "Minimum similarity score a chunk must reach to be returned. Defaults to 0.4.",
+        ),
+        source: z.string().nullable().optional().describe(
+          "The R2 bucket name for r2, the website URL for web-crawler, or the D1 databas...",
+        ),
+        source_params: z.object({
+          d1: z.object({
+            query: z.string().min(1).max(10000),
+            template: z.enum(["labelled", "content_only", "key_value", "json"])
+              .optional().default("labelled"),
+          }).optional(),
+          exclude_items: z.array(
+            z.string().max(500).regex(
+              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
+            ),
+          ).optional(),
+          include_items: z.array(
+            z.string().max(500).regex(
+              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
+            ),
+          ).optional(),
+          prefix: z.string().optional(),
+          r2_jurisdiction: z.string().optional().default("default"),
+          web_crawler: z.object({
+            discover_options: z.object({
+              depth: z.number().min(1).max(100000).optional().default(5),
+              include_external_links: z.boolean().optional().default(false),
+              include_subdomains: z.boolean().optional().default(false),
+              limit: z.number().min(1).max(100000).optional().default(100000),
+              max_age: z.number().min(0).max(604800).optional().default(86400),
+              source: z.enum(["all", "sitemaps", "links"]).optional().default(
+                "all",
+              ),
+            }).optional(),
+            parse_options: z.object({
+              content_selector: z.array(z.object({
+                path: z.string().min(1).max(200),
+                selector: z.string().min(1).max(200),
+              })).optional(),
+              include_headers: z.record(
+                z.string(),
+                z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+              ).optional(),
+              include_images: z.boolean().optional().default(false),
+              specific_sitemaps: z.array(z.string()).optional(),
+              use_browser_rendering: z.boolean().optional().default(true),
+            }).optional(),
+            parse_type: z.enum(["sitemap", "discover"]).optional().default(
+              "sitemap",
+            ),
+          }).optional().default({ "parse_type": "sitemap" }),
+        }).nullable().optional(),
+        sync_interval: z.union([
+          z.union([z.literal(900)]),
+          z.union([z.literal(1800)]),
+          z.union([z.literal(3600)]),
+          z.union([z.literal(7200)]),
+          z.union([z.literal(14400)]),
+          z.union([z.literal(21600)]),
+          z.union([z.literal(43200)]),
+          z.union([z.literal(86400)]),
+        ]).optional().describe(
+          "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 18...",
+        ),
+        token_id: z.string().optional(),
+        type: z.union([
+          z.literal("r2"),
+          z.literal("web-crawler"),
+          z.literal("d1"),
+          z.literal(null),
+        ]).nullable().optional().describe(
+          "Source type. When omitted or null with a non-blank source, HTTP(S) URLs infer...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances`,
+          body,
+        );
+
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(created?.id ?? String(args.namespace)),
+        );
+        const handle = await context.writeResource("instance", id, result);
+        context.logger.info("Created instance {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_ai_search_namespace_fetch_instance: {
+      description: "Get an AI Search instance.",
+      arguments: z.object({
+        id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}`,
+        );
+
+        const handle = await context.writeResource(
+          "ai_search_namespace_fetch_instance",
+          sanitizeInstanceName(String(args.namespace)),
+          result,
+        );
+        context.logger.info("Fetched ai_search_namespace_fetch_instance", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_instance: {
+      description: "Update an AI Search instance.",
+      arguments: z.object({
+        id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+        ai_gateway_id: z.string().nullable().optional(),
+        ai_search_model: z.string().nullable().optional().describe(
+          "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Ch...",
+        ),
+        cache: z.boolean().optional(),
+        cache_threshold: z.enum([
+          "super_strict_match",
+          "close_enough",
+          "flexible_friend",
+          "anything_goes",
+        ]).optional(),
+        cache_ttl: z.union([
+          z.union([z.literal(600)]),
+          z.union([z.literal(1800)]),
+          z.union([z.literal(3600)]),
+          z.union([z.literal(7200)]),
+          z.union([z.literal(21600)]),
+          z.union([z.literal(43200)]),
+          z.union([z.literal(86400)]),
+          z.union([z.literal(172800)]),
+          z.union([z.literal(259200)]),
+          z.union([z.literal(518400)]),
+        ]).optional().describe(
+          "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (...",
+        ),
+        chunk: z.boolean().optional(),
+        chunk_overlap: z.number().int().min(0).max(30).optional(),
+        chunk_size: z.number().int().min(64).optional(),
+        custom_metadata: z.array(z.object({
+          data_type: z.enum(["text", "number", "boolean", "datetime"]),
+          field_name: z.string().min(1).max(64),
+        })).optional(),
+        embedding_model: z.string().nullable().optional(),
+        fusion_method: z.enum(["max", "rrf"]).optional(),
+        index_method: z.object({
+          keyword: z.boolean(),
+          vector: z.boolean(),
+        }).optional().describe(
+          "Controls which storage backends indexing uses. Defaults to vector and keyword...",
+        ),
+        indexing_options: z.object({
+          file_summary: z.boolean().optional().default(false),
+          keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+            "porter",
+          ),
+          use_ocr: z.boolean().optional().default(false),
+        }).nullable().optional(),
+        max_num_results: z.number().int().min(1).max(50).optional(),
+        metadata: z.object({
+          created_from_aisearch_wizard: z.boolean().optional(),
+          created_from_emdash_plugin: z.object({
+            type: z.enum(["native", "rest"]),
+            version: z.string(),
+          }).optional(),
+          worker_domain: z.string().optional(),
+        }).optional(),
+        paused: z.boolean().optional(),
+        public_endpoint_params: z.object({
+          authorized_hosts: z.array(z.string()).optional(),
+          chat_completions_endpoint: z.object({
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+          custom_domains: z.array(z.string().min(1).max(253)).nullable()
+            .optional(),
+          default_domain_enabled: z.boolean().optional().default(true),
+          enabled: z.boolean().optional().default(false),
+          mcp: z.object({
+            description: z.string().optional().default(
+              "Finds exactly what you're looking for",
+            ),
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+          rate_limit: z.object({
+            period_ms: z.number().int().min(60000).max(3600000).optional(),
+            requests: z.number().int().min(1).optional(),
+            technique: z.enum(["fixed", "sliding"]).optional(),
+          }).optional(),
+          search_endpoint: z.object({
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+        }).optional(),
+        reranking: z.boolean().optional(),
+        reranking_model: z.string().nullable().optional(),
+        retrieval_options: z.object({
+          boost_by: z.array(z.object({
+            direction: z.enum(["asc", "desc", "exists", "not_exists"])
+              .optional(),
+            field: z.string().min(1).max(64),
+          })).optional(),
+          keyword_match_mode: z.enum(["and", "or"]).optional(),
+        }).nullable().optional(),
+        rewrite_model: z.string().nullable().optional().describe(
+          "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Ch...",
+        ),
+        rewrite_query: z.boolean().optional(),
+        score_threshold: z.number().min(0).max(1).optional().describe(
+          "Minimum similarity score a chunk must reach to be returned. Defaults to 0.4.",
+        ),
+        source: z.string().nullable().optional().describe(
+          "The R2 bucket name for r2, the website URL for web-crawler, or the D1 databas...",
+        ),
+        source_params: z.object({
+          d1: z.object({
+            query: z.string().min(1).max(10000).optional(),
+            template: z.enum(["labelled", "content_only", "key_value", "json"])
+              .optional(),
+          }).optional(),
+          exclude_items: z.array(
+            z.string().max(500).regex(
+              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
+            ),
+          ).optional(),
+          include_items: z.array(
+            z.string().max(500).regex(
+              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
+            ),
+          ).optional(),
+          prefix: z.string().optional(),
+          r2_jurisdiction: z.string().optional().default("default"),
+          web_crawler: z.object({
+            discover_options: z.object({
+              depth: z.number().min(1).max(100000).optional().default(5),
+              include_external_links: z.boolean().optional().default(false),
+              include_subdomains: z.boolean().optional().default(false),
+              limit: z.number().min(1).max(100000).optional().default(100000),
+              max_age: z.number().min(0).max(604800).optional().default(86400),
+              source: z.enum(["all", "sitemaps", "links"]).optional().default(
+                "all",
+              ),
+            }).optional(),
+            parse_options: z.object({
+              content_selector: z.array(z.object({
+                path: z.string().min(1).max(200),
+                selector: z.string().min(1).max(200),
+              })).optional(),
+              include_headers: z.record(
+                z.string(),
+                z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+              ).optional(),
+              include_images: z.boolean().optional().default(false),
+              specific_sitemaps: z.array(z.string()).optional(),
+              use_browser_rendering: z.boolean().optional().default(true),
+            }).optional(),
+            parse_type: z.enum(["sitemap", "discover"]).optional().default(
+              "sitemap",
+            ),
+          }).optional().default({ "parse_type": "sitemap" }),
+        }).nullable().optional(),
+        summarization: z.boolean().optional().describe(
+          "Deprecated and ignored during indexing and search; changing it still re-index...",
+        ),
+        summarization_model: z.string().nullable().optional().describe(
+          "Deprecated and ignored during indexing and search; changing it still re-index...",
+        ),
+        sync_interval: z.union([
+          z.union([z.literal(900)]),
+          z.union([z.literal(1800)]),
+          z.union([z.literal(3600)]),
+          z.union([z.literal(7200)]),
+          z.union([z.literal(14400)]),
+          z.union([z.literal(21600)]),
+          z.union([z.literal(43200)]),
+          z.union([z.literal(86400)]),
+        ]).optional().describe(
+          "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 18...",
+        ),
+        system_prompt_ai_search: z.string().nullable().optional(),
+        system_prompt_index_summarization: z.string().nullable().optional()
+          .describe(
+            "Deprecated and has no effect. Use indexing_options.file_summary instead.",
+          ),
+        system_prompt_rewrite_query: z.string().nullable().optional(),
+        token_id: z.string().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["id", "namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "instance",
+          sanitizeInstanceName(String(args.namespace)),
+          result,
+        );
+        context.logger.info("Updated instance", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_ai_search_move_instance: {
+      description: "Move an instance to a different namespace.",
+      arguments: z.object({
+        namespace: z.string().describe("Current namespace of the instance."),
+        id: z.string().describe("Instance id."),
+        new_namespace: z.string().regex(
+          new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+        ).describe("Target namespace to move the instance into."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["namespace", "id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "ai_search_move_instance",
+          sanitizeInstanceName(String(args.id)),
+          result,
+        );
+        context.logger.info("Updated ai_search_move_instance", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_instance: {
+      description: "Delete an AI Search instance.",
+      arguments: z.object({
+        id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.namespace });
+        return { dataHandles: [] };
+      },
+    },
+    create_ai_search_namespace_instance_chat_completion: {
+      description: "Chat Completions",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        namespace: z.string().describe("Namespace name."),
+        ai_search_options: z.object({
+          cache: z.object({
+            cache_threshold: z.enum([
+              "super_strict_match",
+              "close_enough",
+              "flexible_friend",
+              "anything_goes",
+            ]).optional(),
+            enabled: z.boolean().optional(),
+          }).optional(),
+          custom_metadata: z.record(
+            z.string(),
+            z.union([z.string(), z.number(), z.boolean()]),
+          ).optional(),
+          query_rewrite: z.object({
+            enabled: z.boolean().optional(),
+            model: z.string().optional(),
+            rewrite_prompt: z.string().optional(),
+          }).optional(),
+          reranking: z.object({
+            enabled: z.boolean().optional(),
+            match_threshold: z.number().min(0).max(1).optional(),
+            model: z.string().optional(),
+          }).optional(),
+          retrieval: z.object({
+            boost_by: z.array(z.object({
+              direction: z.enum(["asc", "desc", "exists", "not_exists"])
+                .optional(),
+              field: z.string().min(1).max(64),
+            })).optional(),
+            context_expansion: z.number().int().min(0).max(3).optional()
+              .default(0),
+            filters: z.record(z.string(), z.unknown()).optional(),
+            fusion_method: z.enum(["max", "rrf"]).optional(),
+            keyword_match_mode: z.enum(["and", "or"]).optional(),
+            match_threshold: z.number().min(0).max(1).optional(),
+            max_num_results: z.number().int().min(1).max(50).optional(),
+            retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
+            return_on_failure: z.boolean().optional().default(true),
+          }).optional(),
+        }).optional(),
+        messages: z.array(z.object({
+          content: z.union([
+            z.string(),
+            z.array(z.union([
+              z.object({
+                text: z.string().min(1),
+                type: z.enum(["text"]),
+              }),
+              z.object({
+                image_url: z.object({
+                  url: z.unknown(),
+                }),
+                type: z.enum(["image_url"]),
+              }),
+              z.object({
+                file: z.object({
+                  file_data: z.unknown().optional(),
+                  file_id: z.unknown().optional(),
+                  filename: z.unknown(),
+                }),
+                type: z.enum(["file"]),
+              }),
+            ])),
+            z.union([z.literal(null)]).nullable(),
+          ]),
+          role: z.enum(["system", "developer", "user", "assistant", "tool"]),
+        })),
+        model: z.string().optional().describe(
+          "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Ch...",
+        ),
+        stream: z.boolean().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["id", "namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/chat/completions`,
+          body,
+        );
+
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(
+            created?.id ??
+              await shortHash(
+                JSON.stringify([String(args.id), String(args.namespace)]),
+              ),
+          ),
+        );
+        const handle = await context.writeResource(
+          "ai_search_namespace_instance_chat_completion",
+          id,
+          result,
+        );
+        context.logger.info(
+          "Created ai_search_namespace_instance_chat_completion {id}",
+          { id },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    list_items: {
+      description: "Items List.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        namespace: z.string().describe("Namespace name."),
+        page: z.number().optional(),
+        per_page: z.number().optional(),
+        search: z.string().optional(),
+        sort_by: z.enum(["status", "modified_at"]).optional().describe(
+          'Sort order for items. "status" (default) sorts items according to status priority, then last_seen_at. "modified_at" sorts items according to file modification time (most recent first), falling back to created_at.',
+        ),
+        status: z.enum([
+          "queued",
+          "running",
+          "completed",
+          "error",
+          "skipped",
+          "outdated",
+        ]).optional(),
+        source: z.string().optional().describe(
+          'Return only items with this source_id. Use "builtin" for uploaded files, or a source identifier like "web-crawler:https://example.com".',
+        ),
+        metadata_filter: z.string().optional().describe(
+          'JSON-encoded metadata filter using Vectorize filter syntax. Examples: {"folder":"reports/"}, {"timestamp":{"$gte":1700000000000}}, {"folder":{"$in":["docs/","reports/"]}}.',
+        ),
+        item_id: z.string().optional().describe(
+          "Return only the item with this unique ID. Returns at most one item.",
+        ),
+        key: z.string().optional().describe(
+          "Return only items with this exact key (object key / filename). Each key is unique within a source, so combine with `source` to disambiguate across data sources.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["id", "namespace", "page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/items`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("items", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} items", { count: results.length });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_or_update_item: {
+      description: "Create or Update Item.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        namespace: z.string().describe("Namespace name."),
+        key: z.string().describe(
+          "Item key / filename. Must not exceed 128 characters.",
+        ),
+        next_action: z.enum(["INDEX"]),
+        wait_for_completion: z.boolean().optional().describe(
+          "Wait for indexing before responding. After processing, vector-indexed instanc...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["id", "namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/items`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "or_update_item",
+          sanitizeInstanceName(String(args.namespace)),
+          result,
+        );
+        context.logger.info("Updated create_or_update_item", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    get_item: {
+      description: "Get Item.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        item_id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/items/${args.item_id}`,
+        );
+
+        const handle = await context.writeResource(
+          "item",
+          sanitizeInstanceName(String(args.namespace)),
+          result,
+        );
+        context.logger.info("Fetched item", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_ai_search_namespace_instance_sync_item: {
+      description: "Sync Item.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        item_id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+        next_action: z.enum(["INDEX"]),
+        wait_for_completion: z.boolean().optional().describe(
+          "Wait for indexing before responding. After processing, vector-indexed instanc...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["id", "item_id", "namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/items/${args.item_id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "ai_search_namespace_instance_sync_item",
+          sanitizeInstanceName(String(args.namespace)),
+          result,
+        );
+        context.logger.info(
+          "Updated ai_search_namespace_instance_sync_item",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_item: {
+      description: "Delete Item.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        item_id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/items/${args.item_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.namespace });
+        return { dataHandles: [] };
+      },
+    },
+    list_item_chunks: {
+      description: "List Item Chunks.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        item_id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+        limit: z.number().optional(),
+        offset: z.number().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set([
+          "id",
+          "item_id",
+          "namespace",
+          "page",
+          "per_page",
+        ]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/items/${args.item_id}/chunks`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("item_chunks", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} item_chunks", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    list_ai_search_namespace_instance_logs_item: {
+      description: "Item Logs.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        item_id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+        limit: z.number().optional(),
+        cursor: z.string().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["id", "item_id", "namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginatedCursor<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/items/${args.item_id}/logs`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "ai_search_namespace_instance_logs_item",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info(
+          "Found {count} ai_search_namespace_instance_logs_item",
+          { count: results.length },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    list_jobs: {
+      description: "List Jobs",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        namespace: z.string().describe("Namespace name."),
+        page: z.number().optional(),
+        per_page: z.number().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["id", "namespace", "page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/jobs`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("jobs", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} jobs", { count: results.length });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_job: {
+      description: "Create new job",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        namespace: z.string().describe("Namespace name."),
+        description: z.string().max(255).optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["id", "namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/jobs`,
+          body,
+        );
+
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(
+            created?.id ??
+              await shortHash(
+                JSON.stringify([String(args.id), String(args.namespace)]),
+              ),
+          ),
+        );
+        const handle = await context.writeResource("job", id, result);
+        context.logger.info("Created job {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_job: {
+      description: "Get a Job Details",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        job_id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/jobs/${args.job_id}`,
+        );
+
+        const handle = await context.writeResource(
+          "job",
+          sanitizeInstanceName(String(args.namespace)),
+          result,
+        );
+        context.logger.info("Fetched job", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_ai_search_namespace_instance_change_job_status: {
+      description: "Cancel an indexing job.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        job_id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+        action: z.enum(["cancel"]),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["id", "job_id", "namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/jobs/${args.job_id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "ai_search_namespace_instance_change_job_status",
+          sanitizeInstanceName(String(args.namespace)),
+          result,
+        );
+        context.logger.info(
+          "Updated ai_search_namespace_instance_change_job_status",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    list_job_logs: {
+      description: "List Job Logs",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        job_id: z.string(),
+        namespace: z.string().describe("Namespace name."),
+        page: z.number().optional(),
+        per_page: z.number().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set([
+          "id",
+          "job_id",
+          "namespace",
+          "page",
+          "per_page",
+        ]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/jobs/${args.job_id}/logs`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("job_logs", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} job_logs", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    ai_search_namespace_purge_instance_cache: {
+      description: "Purge search cache.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        namespace: z.string().describe("Namespace name."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/purge_cache`,
+        );
+
+        const handle = await context.writeResource(
+          "ai_search_namespace_purge_instance_cache",
+          "ai_search_namespace_purge_instance_cache-current",
+          result ?? {},
+        );
+        context.logger.info(
+          "Executed ai_search_namespace_purge_instance_cache",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    create_ai_search_namespace_instance_search: {
+      description: "Search",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        namespace: z.string().describe("Namespace name."),
+        ai_search_options: z.object({
+          cache: z.object({
+            cache_threshold: z.enum([
+              "super_strict_match",
+              "close_enough",
+              "flexible_friend",
+              "anything_goes",
+            ]).optional(),
+            enabled: z.boolean().optional(),
+          }).optional(),
+          custom_metadata: z.record(
+            z.string(),
+            z.union([z.string(), z.number(), z.boolean()]),
+          ).optional(),
+          query_rewrite: z.object({
+            enabled: z.boolean().optional(),
+            model: z.string().optional(),
+            rewrite_prompt: z.string().optional(),
+          }).optional(),
+          reranking: z.object({
+            enabled: z.boolean().optional(),
+            match_threshold: z.number().min(0).max(1).optional(),
+            model: z.string().optional(),
+          }).optional(),
+          retrieval: z.object({
+            boost_by: z.array(z.object({
+              direction: z.enum(["asc", "desc", "exists", "not_exists"])
+                .optional(),
+              field: z.string().min(1).max(64),
+            })).optional(),
+            context_expansion: z.number().int().min(0).max(3).optional()
+              .default(0),
+            filters: z.record(z.string(), z.unknown()).optional(),
+            fusion_method: z.enum(["max", "rrf"]).optional(),
+            keyword_match_mode: z.enum(["and", "or"]).optional(),
+            match_threshold: z.number().min(0).max(1).optional(),
+            max_num_results: z.number().int().min(1).max(50).optional(),
+            retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
+            return_on_failure: z.boolean().optional().default(true),
+          }).optional(),
+        }).optional(),
+        messages: z.array(z.object({
+          content: z.union([
+            z.string(),
+            z.array(z.union([
+              z.object({
+                text: z.string().min(1),
+                type: z.enum(["text"]),
+              }),
+              z.object({
+                image_url: z.object({
+                  url: z.unknown(),
+                }),
+                type: z.enum(["image_url"]),
+              }),
+              z.object({
+                file: z.object({
+                  file_data: z.unknown().optional(),
+                  file_id: z.unknown().optional(),
+                  filename: z.unknown(),
+                }),
+                type: z.enum(["file"]),
+              }),
+            ])),
+            z.union([z.literal(null)]).nullable(),
+          ]),
+          role: z.enum(["system", "developer", "user", "assistant", "tool"]),
+        })).optional().describe(
+          "OpenAI-compatible message array. For multimodal queries, set the last user me...",
+        ),
+        query: z.string().min(1).optional().describe(
+          "A simple text query string. Alternative to 'messages' — provide either this o...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["id", "namespace"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/search`,
+          body,
+        );
+
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(
+            created?.id ??
+              await shortHash(
+                JSON.stringify([String(args.id), String(args.namespace)]),
+              ),
+          ),
+        );
+        const handle = await context.writeResource(
+          "ai_search_namespace_instance_search",
+          id,
+          result,
+        );
+        context.logger.info(
+          "Created ai_search_namespace_instance_search {id}",
+          { id },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    get_ai_search_namespace_stats: {
+      description: "Get instance statistics.",
+      arguments: z.object({
+        id: z.string().describe(
+          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
+        ),
+        namespace: z.string().describe("Namespace name."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/ai-search/namespaces/${args.namespace}/instances/${args.id}/stats`,
+        );
+
+        const handle = await context.writeResource(
+          "ai_search_namespace_stats",
+          sanitizeInstanceName(String(args.namespace)),
+          result,
+        );
+        context.logger.info("Fetched ai_search_namespace_stats", {});
+        return { dataHandles: [handle] };
+      },
+    },
     get_ai_search_fetch_namespace: {
-      description: "Read namespace.",
+      description: "Get a namespace",
       arguments: z.object({
         name: z.string(),
       }),
@@ -9026,12 +9036,41 @@ export const model = {
       },
     },
     update_namespace: {
-      description: "Update namespace.",
+      description: "Update a namespace",
       arguments: z.object({
         name: z.string(),
         description: z.string().max(256).nullable().optional().describe(
           "Optional description for the namespace. Max 256 characters.",
         ),
+        public_endpoint_params: z.object({
+          authorized_hosts: z.array(z.string()).optional(),
+          chat_completions_endpoint: z.object({
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+          custom_domains: z.array(z.string().min(1).max(253)).nullable()
+            .optional(),
+          default_domain_enabled: z.boolean().optional().default(true),
+          enabled: z.boolean().optional().default(false),
+          instances_allowed: z.array(
+            z.string().min(1).max(64).regex(
+              new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+            ),
+          ).optional().default([]),
+          mcp: z.object({
+            description: z.string().optional().default(
+              "Finds exactly what you're looking for",
+            ),
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+          rate_limit: z.object({
+            period_ms: z.number().int().min(60000).max(3600000).optional(),
+            requests: z.number().int().min(1).optional(),
+            technique: z.enum(["fixed", "sliding"]).optional(),
+          }).optional(),
+          search_endpoint: z.object({
+            disabled: z.boolean().optional().default(false),
+          }).optional(),
+        }).nullable().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9072,7 +9111,7 @@ export const model = {
       },
     },
     delete_namespace: {
-      description: "Delete namespace.",
+      description: "Delete a namespace",
       arguments: z.object({
         name: z.string(),
       }),
@@ -9105,7 +9144,7 @@ export const model = {
     create_ai_search_namespace_multi_instance_chat_completion: {
       description: "Multi-Instance Chat Completions",
       arguments: z.object({
-        name: z.string().describe("Namespace name"),
+        name: z.string().describe("Namespace name."),
         ai_search_options: z.object({
           cache: z.object({
             cache_threshold: z.enum([
@@ -9116,6 +9155,10 @@ export const model = {
             ]).optional(),
             enabled: z.boolean().optional(),
           }).optional(),
+          custom_metadata: z.record(
+            z.string(),
+            z.union([z.string(), z.number(), z.boolean()]),
+          ).optional(),
           instance_ids: z.array(
             z.string().min(1).max(64).regex(
               new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
@@ -9123,49 +9166,13 @@ export const model = {
           ),
           query_rewrite: z.object({
             enabled: z.boolean().optional(),
-            model: z.union([
-              z.enum([
-                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                "@cf/zai-org/glm-4.7-flash",
-                "@cf/meta/llama-3.1-8b-instruct-fast",
-                "@cf/meta/llama-3.1-8b-instruct-fp8",
-                "@cf/meta/llama-4-scout-17b-16e-instruct",
-                "@cf/qwen/qwen3-30b-a3b-fp8",
-                "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                "@cf/moonshotai/kimi-k2-instruct",
-                "@cf/google/gemma-3-12b-it",
-                "@cf/google/gemma-4-26b-a4b-it",
-                "@cf/moonshotai/kimi-k2.5",
-                "anthropic/claude-3-7-sonnet",
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-opus-4",
-                "anthropic/claude-3-5-haiku",
-                "cerebras/qwen-3-235b-a22b-instruct",
-                "cerebras/qwen-3-235b-a22b-thinking",
-                "cerebras/llama-3.3-70b",
-                "cerebras/llama-4-maverick-17b-128e-instruct",
-                "cerebras/llama-4-scout-17b-16e-instruct",
-                "cerebras/gpt-oss-120b",
-                "google-ai-studio/gemini-2.5-flash",
-                "google-ai-studio/gemini-2.5-pro",
-                "grok/grok-4",
-                "groq/llama-3.3-70b-versatile",
-                "groq/llama-3.1-8b-instant",
-                "openai/gpt-5",
-                "openai/gpt-5-mini",
-                "openai/gpt-5-nano",
-              ]),
-              z.enum([""]),
-            ]).optional(),
+            model: z.string().optional(),
             rewrite_prompt: z.string().optional(),
           }).optional(),
           reranking: z.object({
             enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            model: z.union([
-              z.enum(["@cf/baai/bge-reranker-base"]),
-              z.enum([""]),
-            ]).optional(),
+            match_threshold: z.number().min(0).max(1).optional(),
+            model: z.string().optional(),
           }).optional(),
           retrieval: z.object({
             boost_by: z.array(z.object({
@@ -9178,10 +9185,8 @@ export const model = {
             filters: z.record(z.string(), z.unknown()).optional(),
             fusion_method: z.enum(["max", "rrf"]).optional(),
             keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            max_num_results: z.number().int().min(1).max(50).optional().default(
-              10,
-            ),
+            match_threshold: z.number().min(0).max(1).optional(),
+            max_num_results: z.number().int().min(1).max(50).optional(),
             retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
             return_on_failure: z.boolean().optional().default(true),
           }).optional(),
@@ -9200,45 +9205,22 @@ export const model = {
                 }),
                 type: z.enum(["image_url"]),
               }),
+              z.object({
+                file: z.object({
+                  file_data: z.unknown().optional(),
+                  file_id: z.unknown().optional(),
+                  filename: z.unknown(),
+                }),
+                type: z.enum(["file"]),
+              }),
             ])),
-            z.unknown().nullable(),
+            z.union([z.literal(null)]).nullable(),
           ]),
           role: z.enum(["system", "developer", "user", "assistant", "tool"]),
         })),
-        model: z.union([
-          z.enum([
-            "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-            "@cf/zai-org/glm-4.7-flash",
-            "@cf/meta/llama-3.1-8b-instruct-fast",
-            "@cf/meta/llama-3.1-8b-instruct-fp8",
-            "@cf/meta/llama-4-scout-17b-16e-instruct",
-            "@cf/qwen/qwen3-30b-a3b-fp8",
-            "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-            "@cf/moonshotai/kimi-k2-instruct",
-            "@cf/google/gemma-3-12b-it",
-            "@cf/google/gemma-4-26b-a4b-it",
-            "@cf/moonshotai/kimi-k2.5",
-            "anthropic/claude-3-7-sonnet",
-            "anthropic/claude-sonnet-4",
-            "anthropic/claude-opus-4",
-            "anthropic/claude-3-5-haiku",
-            "cerebras/qwen-3-235b-a22b-instruct",
-            "cerebras/qwen-3-235b-a22b-thinking",
-            "cerebras/llama-3.3-70b",
-            "cerebras/llama-4-maverick-17b-128e-instruct",
-            "cerebras/llama-4-scout-17b-16e-instruct",
-            "cerebras/gpt-oss-120b",
-            "google-ai-studio/gemini-2.5-flash",
-            "google-ai-studio/gemini-2.5-pro",
-            "grok/grok-4",
-            "groq/llama-3.3-70b-versatile",
-            "groq/llama-3.1-8b-instant",
-            "openai/gpt-5",
-            "openai/gpt-5-mini",
-            "openai/gpt-5-nano",
-          ]),
-          z.enum([""]),
-        ]).optional(),
+        model: z.string().optional().describe(
+          "A Workers AI model ID or an AI Gateway model ID compatible with the OpenAI Ch...",
+        ),
         stream: z.boolean().optional(),
       }),
       execute: async (
@@ -9286,925 +9268,10 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_ai_search_namespace_fetch_instance: {
-      description: "Get an AI Search instance.",
-      arguments: z.object({
-        id: z.string(),
-        name: z.string().describe("Namespace name"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}`,
-        );
-
-        const handle = await context.writeResource(
-          "ai_search_namespace_fetch_instance",
-          sanitizeInstanceName(String(args.name)),
-          result,
-        );
-        context.logger.info("Fetched ai_search_namespace_fetch_instance", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    update_ai_search_move_instance: {
-      description: "Move an instance to a different namespace.",
-      arguments: z.object({
-        name: z.string().describe("Current namespace of the instance."),
-        id: z.string().describe("Instance id."),
-        new_namespace: z.string().regex(
-          new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
-        ).describe("Target namespace to move the instance into."),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["name", "id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "ai_search_move_instance",
-          sanitizeInstanceName(String(args.id)),
-          result,
-        );
-        context.logger.info("Updated ai_search_move_instance", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    create_ai_search_namespace_instance_chat_completion: {
-      description: "Chat Completions",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        name: z.string().describe("Namespace name"),
-        ai_search_options: z.object({
-          cache: z.object({
-            cache_threshold: z.enum([
-              "super_strict_match",
-              "close_enough",
-              "flexible_friend",
-              "anything_goes",
-            ]).optional(),
-            enabled: z.boolean().optional(),
-          }).optional(),
-          query_rewrite: z.object({
-            enabled: z.boolean().optional(),
-            model: z.union([
-              z.enum([
-                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                "@cf/zai-org/glm-4.7-flash",
-                "@cf/meta/llama-3.1-8b-instruct-fast",
-                "@cf/meta/llama-3.1-8b-instruct-fp8",
-                "@cf/meta/llama-4-scout-17b-16e-instruct",
-                "@cf/qwen/qwen3-30b-a3b-fp8",
-                "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                "@cf/moonshotai/kimi-k2-instruct",
-                "@cf/google/gemma-3-12b-it",
-                "@cf/google/gemma-4-26b-a4b-it",
-                "@cf/moonshotai/kimi-k2.5",
-                "anthropic/claude-3-7-sonnet",
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-opus-4",
-                "anthropic/claude-3-5-haiku",
-                "cerebras/qwen-3-235b-a22b-instruct",
-                "cerebras/qwen-3-235b-a22b-thinking",
-                "cerebras/llama-3.3-70b",
-                "cerebras/llama-4-maverick-17b-128e-instruct",
-                "cerebras/llama-4-scout-17b-16e-instruct",
-                "cerebras/gpt-oss-120b",
-                "google-ai-studio/gemini-2.5-flash",
-                "google-ai-studio/gemini-2.5-pro",
-                "grok/grok-4",
-                "groq/llama-3.3-70b-versatile",
-                "groq/llama-3.1-8b-instant",
-                "openai/gpt-5",
-                "openai/gpt-5-mini",
-                "openai/gpt-5-nano",
-              ]),
-              z.enum([""]),
-            ]).optional(),
-            rewrite_prompt: z.string().optional(),
-          }).optional(),
-          reranking: z.object({
-            enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            model: z.union([
-              z.enum(["@cf/baai/bge-reranker-base"]),
-              z.enum([""]),
-            ]).optional(),
-          }).optional(),
-          retrieval: z.object({
-            boost_by: z.array(z.object({
-              direction: z.enum(["asc", "desc", "exists", "not_exists"])
-                .optional(),
-              field: z.string().min(1).max(64),
-            })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional()
-              .default(0),
-            filters: z.record(z.string(), z.unknown()).optional(),
-            fusion_method: z.enum(["max", "rrf"]).optional(),
-            keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            max_num_results: z.number().int().min(1).max(50).optional().default(
-              10,
-            ),
-            retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional().default(true),
-          }).optional(),
-        }).optional(),
-        messages: z.array(z.object({
-          content: z.union([
-            z.string(),
-            z.array(z.union([
-              z.object({
-                text: z.string().min(1),
-                type: z.enum(["text"]),
-              }),
-              z.object({
-                image_url: z.object({
-                  url: z.unknown(),
-                }),
-                type: z.enum(["image_url"]),
-              }),
-            ])),
-            z.unknown().nullable(),
-          ]),
-          role: z.enum(["system", "developer", "user", "assistant", "tool"]),
-        })),
-        model: z.union([
-          z.enum([
-            "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-            "@cf/zai-org/glm-4.7-flash",
-            "@cf/meta/llama-3.1-8b-instruct-fast",
-            "@cf/meta/llama-3.1-8b-instruct-fp8",
-            "@cf/meta/llama-4-scout-17b-16e-instruct",
-            "@cf/qwen/qwen3-30b-a3b-fp8",
-            "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-            "@cf/moonshotai/kimi-k2-instruct",
-            "@cf/google/gemma-3-12b-it",
-            "@cf/google/gemma-4-26b-a4b-it",
-            "@cf/moonshotai/kimi-k2.5",
-            "anthropic/claude-3-7-sonnet",
-            "anthropic/claude-sonnet-4",
-            "anthropic/claude-opus-4",
-            "anthropic/claude-3-5-haiku",
-            "cerebras/qwen-3-235b-a22b-instruct",
-            "cerebras/qwen-3-235b-a22b-thinking",
-            "cerebras/llama-3.3-70b",
-            "cerebras/llama-4-maverick-17b-128e-instruct",
-            "cerebras/llama-4-scout-17b-16e-instruct",
-            "cerebras/gpt-oss-120b",
-            "google-ai-studio/gemini-2.5-flash",
-            "google-ai-studio/gemini-2.5-pro",
-            "grok/grok-4",
-            "groq/llama-3.3-70b-versatile",
-            "groq/llama-3.1-8b-instant",
-            "openai/gpt-5",
-            "openai/gpt-5-mini",
-            "openai/gpt-5-nano",
-          ]),
-          z.enum([""]),
-        ]).optional(),
-        stream: z.boolean().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id", "name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/chat/completions`,
-          body,
-        );
-
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(
-            created?.id ??
-              await shortHash(
-                JSON.stringify([String(args.id), String(args.name)]),
-              ),
-          ),
-        );
-        const handle = await context.writeResource(
-          "ai_search_namespace_instance_chat_completion",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created ai_search_namespace_instance_chat_completion {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    list_items: {
-      description: "Items List.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        name: z.string().describe("Namespace name"),
-        page: z.number().optional(),
-        per_page: z.number().optional(),
-        search: z.string().optional(),
-        sort_by: z.enum(["status", "modified_at"]).optional().describe(
-          'Sort order for items. "status" (default) sorts by status priority then last_seen_at. "modified_at" sorts by file modification time (most recent first), falling back to created_at.',
-        ),
-        status: z.enum([
-          "queued",
-          "running",
-          "completed",
-          "error",
-          "skipped",
-          "outdated",
-        ]).optional(),
-        source: z.string().optional().describe(
-          'Filter items by source_id. Use "builtin" for uploaded files, or a source identifier like "web-crawler:https://example.com".',
-        ),
-        metadata_filter: z.string().optional().describe(
-          'JSON-encoded metadata filter using Vectorize filter syntax. Examples: {"folder":"reports/"}, {"timestamp":{"$gte":1700000000000}}, {"folder":{"$in":["docs/","reports/"]}}',
-        ),
-        item_id: z.string().optional().describe(
-          "Filter items by their unique ID. Returns at most one item.",
-        ),
-        key: z.string().optional().describe(
-          "Filter items by their exact key (object key / filename). Keys are unique per source, so combine with `source` to disambiguate across data sources.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set(["id", "name", "page", "per_page"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items`,
-          params,
-        );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource("items", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
-
-        context.logger.info("Found {count} items", { count: results.length });
-        return { dataHandles: [handle] };
-      },
-    },
-    create_or_update_item: {
-      description: "Create or Update Item.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        name: z.string().describe("Namespace name"),
-        key: z.string().describe(
-          "Item key / filename. Must not exceed 128 characters.",
-        ),
-        next_action: z.enum(["INDEX"]),
-        wait_for_completion: z.boolean().optional().describe(
-          "Wait for indexing to fully complete before responding. On RAGs with vector in...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id", "name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "or_update_item",
-          sanitizeInstanceName(String(args.name)),
-          result,
-        );
-        context.logger.info("Updated create_or_update_item", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_item: {
-      description: "Get Item.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        item_id: z.string(),
-        name: z.string().describe("Namespace name"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}`,
-        );
-
-        const handle = await context.writeResource(
-          "item",
-          sanitizeInstanceName(String(args.name)),
-          result,
-        );
-        context.logger.info("Fetched item", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    update_ai_search_namespace_instance_sync_item: {
-      description: "Sync Item.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        item_id: z.string(),
-        name: z.string().describe("Namespace name"),
-        next_action: z.enum(["INDEX"]),
-        wait_for_completion: z.boolean().optional().describe(
-          "Wait for indexing to fully complete before responding. On RAGs with vector in...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id", "item_id", "name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "ai_search_namespace_instance_sync_item",
-          sanitizeInstanceName(String(args.name)),
-          result,
-        );
-        context.logger.info(
-          "Updated ai_search_namespace_instance_sync_item",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    delete_item: {
-      description: "Delete Item.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        item_id: z.string(),
-        name: z.string().describe("Namespace name"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}`,
-        );
-
-        context.logger.info("Deleted resource {id}", { id: args.name });
-        return { dataHandles: [] };
-      },
-    },
-    list_item_chunks: {
-      description: "List Item Chunks.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        item_id: z.string(),
-        name: z.string().describe("Namespace name"),
-        limit: z.number().optional(),
-        offset: z.number().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set([
-          "id",
-          "item_id",
-          "name",
-          "page",
-          "per_page",
-        ]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/chunks`,
-          params,
-        );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource("item_chunks", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
-
-        context.logger.info("Found {count} item_chunks", {
-          count: results.length,
-        });
-        return { dataHandles: [handle] };
-      },
-    },
-    list_ai_search_namespace_instance_logs_item: {
-      description: "Item Logs.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        item_id: z.string(),
-        name: z.string().describe("Namespace name"),
-        limit: z.number().optional(),
-        cursor: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set(["id", "item_id", "name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginatedCursor<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/logs`,
-          params,
-        );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource(
-          "ai_search_namespace_instance_logs_item",
-          "main",
-          {
-            items: results,
-            truncated,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
-        );
-
-        context.logger.info(
-          "Found {count} ai_search_namespace_instance_logs_item",
-          { count: results.length },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    update_ai_search_namespace_instance_change_job_status: {
-      description: "Cancel an indexing job.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        job_id: z.string(),
-        name: z.string().describe("Namespace name"),
-        action: z.enum(["cancel"]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id", "job_id", "name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/jobs/${args.job_id}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "ai_search_namespace_instance_change_job_status",
-          sanitizeInstanceName(String(args.name)),
-          result,
-        );
-        context.logger.info(
-          "Updated ai_search_namespace_instance_change_job_status",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_ai_search_namespace_instance_search: {
-      description: "Search",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        name: z.string().describe("Namespace name"),
-        ai_search_options: z.object({
-          cache: z.object({
-            cache_threshold: z.enum([
-              "super_strict_match",
-              "close_enough",
-              "flexible_friend",
-              "anything_goes",
-            ]).optional(),
-            enabled: z.boolean().optional(),
-          }).optional(),
-          query_rewrite: z.object({
-            enabled: z.boolean().optional(),
-            model: z.union([
-              z.enum([
-                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                "@cf/zai-org/glm-4.7-flash",
-                "@cf/meta/llama-3.1-8b-instruct-fast",
-                "@cf/meta/llama-3.1-8b-instruct-fp8",
-                "@cf/meta/llama-4-scout-17b-16e-instruct",
-                "@cf/qwen/qwen3-30b-a3b-fp8",
-                "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                "@cf/moonshotai/kimi-k2-instruct",
-                "@cf/google/gemma-3-12b-it",
-                "@cf/google/gemma-4-26b-a4b-it",
-                "@cf/moonshotai/kimi-k2.5",
-                "anthropic/claude-3-7-sonnet",
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-opus-4",
-                "anthropic/claude-3-5-haiku",
-                "cerebras/qwen-3-235b-a22b-instruct",
-                "cerebras/qwen-3-235b-a22b-thinking",
-                "cerebras/llama-3.3-70b",
-                "cerebras/llama-4-maverick-17b-128e-instruct",
-                "cerebras/llama-4-scout-17b-16e-instruct",
-                "cerebras/gpt-oss-120b",
-                "google-ai-studio/gemini-2.5-flash",
-                "google-ai-studio/gemini-2.5-pro",
-                "grok/grok-4",
-                "groq/llama-3.3-70b-versatile",
-                "groq/llama-3.1-8b-instant",
-                "openai/gpt-5",
-                "openai/gpt-5-mini",
-                "openai/gpt-5-nano",
-              ]),
-              z.enum([""]),
-            ]).optional(),
-            rewrite_prompt: z.string().optional(),
-          }).optional(),
-          reranking: z.object({
-            enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            model: z.union([
-              z.enum(["@cf/baai/bge-reranker-base"]),
-              z.enum([""]),
-            ]).optional(),
-          }).optional(),
-          retrieval: z.object({
-            boost_by: z.array(z.object({
-              direction: z.enum(["asc", "desc", "exists", "not_exists"])
-                .optional(),
-              field: z.string().min(1).max(64),
-            })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional()
-              .default(0),
-            filters: z.record(z.string(), z.unknown()).optional(),
-            fusion_method: z.enum(["max", "rrf"]).optional(),
-            keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            max_num_results: z.number().int().min(1).max(50).optional().default(
-              10,
-            ),
-            retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional().default(true),
-          }).optional(),
-        }).optional(),
-        messages: z.array(z.object({
-          content: z.union([
-            z.string(),
-            z.array(z.union([
-              z.object({
-                text: z.string().min(1),
-                type: z.enum(["text"]),
-              }),
-              z.object({
-                image_url: z.object({
-                  url: z.unknown(),
-                }),
-                type: z.enum(["image_url"]),
-              }),
-            ])),
-            z.unknown().nullable(),
-          ]),
-          role: z.enum(["system", "developer", "user", "assistant", "tool"]),
-        })).optional().describe(
-          "OpenAI-compatible message array. For multimodal queries, set the last user me...",
-        ),
-        query: z.string().min(1).optional().describe(
-          "A simple text query string. Alternative to 'messages' — provide either this o...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["id", "name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/search`,
-          body,
-        );
-
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(
-            created?.id ??
-              await shortHash(
-                JSON.stringify([String(args.id), String(args.name)]),
-              ),
-          ),
-        );
-        const handle = await context.writeResource(
-          "ai_search_namespace_instance_search",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created ai_search_namespace_instance_search {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_ai_search_namespace_stats: {
-      description: "Get instance statistics.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        name: z.string().describe("Namespace name"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/stats`,
-        );
-
-        const handle = await context.writeResource(
-          "ai_search_namespace_stats",
-          sanitizeInstanceName(String(args.name)),
-          result,
-        );
-        context.logger.info("Fetched ai_search_namespace_stats", {});
-        return { dataHandles: [handle] };
-      },
-    },
     create_ai_search_namespace_multi_instance_search: {
       description: "Multi-Instance Search",
       arguments: z.object({
-        name: z.string().describe("Namespace name"),
+        name: z.string().describe("Namespace name."),
         ai_search_options: z.object({
           cache: z.object({
             cache_threshold: z.enum([
@@ -10215,6 +9282,10 @@ export const model = {
             ]).optional(),
             enabled: z.boolean().optional(),
           }).optional(),
+          custom_metadata: z.record(
+            z.string(),
+            z.union([z.string(), z.number(), z.boolean()]),
+          ).optional(),
           instance_ids: z.array(
             z.string().min(1).max(64).regex(
               new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
@@ -10222,49 +9293,13 @@ export const model = {
           ),
           query_rewrite: z.object({
             enabled: z.boolean().optional(),
-            model: z.union([
-              z.enum([
-                "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                "@cf/zai-org/glm-4.7-flash",
-                "@cf/meta/llama-3.1-8b-instruct-fast",
-                "@cf/meta/llama-3.1-8b-instruct-fp8",
-                "@cf/meta/llama-4-scout-17b-16e-instruct",
-                "@cf/qwen/qwen3-30b-a3b-fp8",
-                "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                "@cf/moonshotai/kimi-k2-instruct",
-                "@cf/google/gemma-3-12b-it",
-                "@cf/google/gemma-4-26b-a4b-it",
-                "@cf/moonshotai/kimi-k2.5",
-                "anthropic/claude-3-7-sonnet",
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-opus-4",
-                "anthropic/claude-3-5-haiku",
-                "cerebras/qwen-3-235b-a22b-instruct",
-                "cerebras/qwen-3-235b-a22b-thinking",
-                "cerebras/llama-3.3-70b",
-                "cerebras/llama-4-maverick-17b-128e-instruct",
-                "cerebras/llama-4-scout-17b-16e-instruct",
-                "cerebras/gpt-oss-120b",
-                "google-ai-studio/gemini-2.5-flash",
-                "google-ai-studio/gemini-2.5-pro",
-                "grok/grok-4",
-                "groq/llama-3.3-70b-versatile",
-                "groq/llama-3.1-8b-instant",
-                "openai/gpt-5",
-                "openai/gpt-5-mini",
-                "openai/gpt-5-nano",
-              ]),
-              z.enum([""]),
-            ]).optional(),
+            model: z.string().optional(),
             rewrite_prompt: z.string().optional(),
           }).optional(),
           reranking: z.object({
             enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            model: z.union([
-              z.enum(["@cf/baai/bge-reranker-base"]),
-              z.enum([""]),
-            ]).optional(),
+            match_threshold: z.number().min(0).max(1).optional(),
+            model: z.string().optional(),
           }).optional(),
           retrieval: z.object({
             boost_by: z.array(z.object({
@@ -10277,10 +9312,8 @@ export const model = {
             filters: z.record(z.string(), z.unknown()).optional(),
             fusion_method: z.enum(["max", "rrf"]).optional(),
             keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional().default(0.4),
-            max_num_results: z.number().int().min(1).max(50).optional().default(
-              10,
-            ),
+            match_threshold: z.number().min(0).max(1).optional(),
+            max_num_results: z.number().int().min(1).max(50).optional(),
             retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
             return_on_failure: z.boolean().optional().default(true),
           }).optional(),
@@ -10299,8 +9332,16 @@ export const model = {
                 }),
                 type: z.enum(["image_url"]),
               }),
+              z.object({
+                file: z.object({
+                  file_data: z.unknown().optional(),
+                  file_id: z.unknown().optional(),
+                  filename: z.unknown(),
+                }),
+                type: z.enum(["file"]),
+              }),
             ])),
-            z.unknown().nullable(),
+            z.union([z.literal(null)]).nullable(),
           ]),
           role: z.enum(["system", "developer", "user", "assistant", "tool"]),
         })).optional().describe(
@@ -10356,7 +9397,7 @@ export const model = {
       },
     },
     list_tokens: {
-      description: "List tokens.",
+      description: "List tokens",
       arguments: z.object({
         page: z.number().optional().describe("Page number (1-indexed)."),
         per_page: z.number().optional().describe("Number of results per page."),
@@ -10414,7 +9455,7 @@ export const model = {
       },
     },
     create_tokens: {
-      description: "Create token.",
+      description: "Create a token",
       arguments: z.object({
         cf_api_id: z.string(),
         cf_api_key: z.string().describe(
@@ -10464,7 +9505,7 @@ export const model = {
       },
     },
     get_ai_search_fetch_tokens: {
-      description: "Read token.",
+      description: "Get a token",
       arguments: z.object({
         id: z.string(),
       }),
@@ -10499,7 +9540,7 @@ export const model = {
       },
     },
     update_tokens: {
-      description: "Update token.",
+      description: "Update a token",
       arguments: z.object({
         id: z.string(),
         cf_api_id: z.string(),
@@ -10548,7 +9589,7 @@ export const model = {
       },
     },
     delete_tokens: {
-      description: "Delete token.",
+      description: "Delete a token",
       arguments: z.object({
         id: z.string(),
       }),
@@ -10720,9 +9761,9 @@ export const model = {
     list_public_finetunes: {
       description: "List Public Finetunes",
       arguments: z.object({
-        limit: z.number().optional().describe("Pagination Limit"),
-        offset: z.number().optional().describe("Pagination Offset"),
-        orderBy: z.string().optional().describe("Order By Column Name"),
+        limit: z.number().optional().describe("Pagination Limit."),
+        offset: z.number().optional().describe("Pagination Offset."),
+        orderBy: z.string().optional().describe("Order By Column Name."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10775,10 +9816,79 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_model_schema: {
-      description: "Get Model Schema",
+    delete_finetune: {
+      description: "Delete a Finetune",
       arguments: z.object({
-        model: z.string().optional().describe("Model Name"),
+        finetune_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/ai/finetunes/${args.finetune_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.finetune_id });
+        return { dataHandles: [] };
+      },
+    },
+    get_workers_ai_download_finetune_asset: {
+      description: "Download a Finetune Asset",
+      arguments: z.object({
+        finetune_id: z.string(),
+        file_name: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/ai/finetunes/${args.finetune_id}/finetune-assets/${args.file_name}`,
+        );
+
+        const handle = await context.writeResource(
+          "workers_ai_download_finetune_asset",
+          sanitizeInstanceName(String(args.file_name)),
+          result,
+        );
+        context.logger.info("Fetched workers_ai_download_finetune_asset", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    get_model_schema: {
+      description: "Get an AI model's input and output schemas",
+      arguments: z.object({
+        model: z.string().optional().describe(
+          "AI model identifier, including its namespace and model name.",
+        ),
       }),
       execute: async (
         _args: Record<string, unknown>,
@@ -10815,15 +9925,15 @@ export const model = {
       arguments: z.object({
         per_page: z.number().optional(),
         page: z.number().optional(),
-        task: z.string().optional().describe("Filter by Task Name"),
-        author: z.string().optional().describe("Filter by Author"),
-        source: z.number().optional().describe("Filter by Source Id"),
+        task: z.string().optional().describe("Filter by Task Name."),
+        author: z.string().optional().describe("Filter by Author."),
+        source: z.number().optional().describe("Filter by Source Id."),
         hide_experimental: z.boolean().optional().describe(
-          "Filter to hide experimental models",
+          "Filter to hide experimental models.",
         ),
-        search: z.string().optional().describe("Search"),
+        search: z.string().optional().describe("Search."),
         include_deprecated: z.boolean().optional().describe(
-          "If true, include models whose planned_deprecation_date is in the past — but only within a three-month grace window after that date. Models whose planned_deprecation_date is more than three months in the past remain hidden regardless of this flag. Future planned-deprecation dates are always included regardless of this flag. Defaults to false, preserving the existing behavior of hiding all past-dated deprecations.",
+          "If true, include models for up to three months after their deprecation date. Defaults to false.",
         ),
         format: z.enum(["openrouter"]).optional().describe(
           "If set, return models in the requested marketplace format instead of the default response.",
@@ -10860,13 +9970,13 @@ export const model = {
       },
     },
     create_workers_ai_post_run_generic: {
-      description: "Execute AI Model (Generic)",
+      description: "Run an AI model with request options",
       arguments: z.object({
         input: z.object({}).describe(
-          "Model-specific input data. Format varies by model type.",
+          "JSON object containing the selected model's input fields, such as prompt or m...",
         ),
         model: z.string().describe(
-          "The AI model to execute (e.g., openai/gpt-5.5, anthropic/claude-opus-4.7)",
+          "The AI model to execute (e.g., @cf/google/gemma-4-26b-a4b-it, openai/gpt-5.5,...",
         ),
         options: z.object({
           extraHeaders: z.record(z.string(), z.string()).optional(),
@@ -10920,11879 +10030,12 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    create_workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b: {
-      description: "Execute @cf/ai4bharat/indictrans2-en-indic-1B model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        target_language: z.enum([
-          "asm_Beng",
-          "awa_Deva",
-          "ben_Beng",
-          "bho_Deva",
-          "brx_Deva",
-          "doi_Deva",
-          "eng_Latn",
-          "gom_Deva",
-          "gon_Deva",
-          "guj_Gujr",
-          "hin_Deva",
-          "hne_Deva",
-          "kan_Knda",
-          "kas_Arab",
-          "kas_Deva",
-          "kha_Latn",
-          "lus_Latn",
-          "mag_Deva",
-          "mai_Deva",
-          "mal_Mlym",
-          "mar_Deva",
-          "mni_Beng",
-          "mni_Mtei",
-          "npi_Deva",
-          "ory_Orya",
-          "pan_Guru",
-          "san_Deva",
-          "sat_Olck",
-          "snd_Arab",
-          "snd_Deva",
-          "tam_Taml",
-          "tel_Telu",
-          "urd_Arab",
-          "unr_Deva",
-        ]).describe("Target langauge to translate to"),
-        text: z.union([z.string(), z.array(z.string())]).describe(
-          "Input text to translate. Can be a single string or a list of strings.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/ai4bharat/indictrans2-en-indic-1B${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b: {
-      description:
-        "Execute @cf/ai4bharat/nonomni-indictrans2-en-indic-1b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        target_language: z.enum([
-          "asm_Beng",
-          "awa_Deva",
-          "ben_Beng",
-          "bho_Deva",
-          "brx_Deva",
-          "doi_Deva",
-          "eng_Latn",
-          "gom_Deva",
-          "gon_Deva",
-          "guj_Gujr",
-          "hin_Deva",
-          "hne_Deva",
-          "kan_Knda",
-          "kas_Arab",
-          "kas_Deva",
-          "kha_Latn",
-          "lus_Latn",
-          "mag_Deva",
-          "mai_Deva",
-          "mal_Mlym",
-          "mar_Deva",
-          "mni_Beng",
-          "mni_Mtei",
-          "npi_Deva",
-          "ory_Orya",
-          "pan_Guru",
-          "san_Deva",
-          "sat_Olck",
-          "snd_Arab",
-          "snd_Deva",
-          "tam_Taml",
-          "tel_Telu",
-          "urd_Arab",
-          "unr_Deva",
-        ]).describe("Target langauge to translate to"),
-        text: z.union([z.string(), z.array(z.string())]).describe(
-          "Input text to translate. Can be a single string or a list of strings.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/ai4bharat/nonomni-indictrans2-en-indic-1b${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it: {
-      description: "Execute @cf/aisingapore/gemma-sea-lion-v4-27b-it model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(2000),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(2000),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            requests: z.array(z.union([
-              z.object({
-                frequency_penalty: z.number().min(-2).max(2).optional(),
-                lora: z.string().optional(),
-                max_tokens: z.number().int().optional().default(256),
-                presence_penalty: z.number().min(-2).max(2).optional(),
-                prompt: z.string().min(1),
-                raw: z.boolean().optional().default(false),
-                repetition_penalty: z.number().min(0).max(2).optional(),
-                response_format: z.object({
-                  json_schema: z.unknown().optional(),
-                  type: z.enum(["json_object", "json_schema"]).optional(),
-                }).optional(),
-                seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional().default(false),
-                temperature: z.number().min(0).max(5).optional().default(0.6),
-                top_k: z.number().int().min(1).max(50).optional(),
-                top_p: z.number().min(0.001).max(1).optional(),
-              }),
-              z.object({
-                frequency_penalty: z.number().min(-2).max(2).optional(),
-                functions: z.array(z.object({
-                  code: z.string(),
-                  name: z.string(),
-                })).optional(),
-                max_tokens: z.number().int().optional().default(256),
-                messages: z.array(z.object({
-                  content: z.union([z.unknown(), z.unknown()]),
-                  role: z.string(),
-                })),
-                presence_penalty: z.number().min(-2).max(2).optional(),
-                raw: z.boolean().optional().default(false),
-                repetition_penalty: z.number().min(0).max(2).optional(),
-                response_format: z.object({
-                  json_schema: z.unknown().optional(),
-                  type: z.enum(["json_object", "json_schema"]).optional(),
-                }).optional(),
-                seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional().default(false),
-                temperature: z.number().min(0).max(5).optional().default(0.6),
-                tools: z.array(z.union([
-                  z.object({
-                    description: z.unknown(),
-                    name: z.unknown(),
-                    parameters: z.unknown(),
-                  }),
-                  z.object({
-                    function: z.unknown(),
-                    type: z.unknown(),
-                  }),
-                ])).optional(),
-                top_k: z.number().int().min(1).max(50).optional(),
-                top_p: z.number().min(0.001).max(1).optional(),
-              }),
-            ])),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/aisingapore/gemma-sea-lion-v4-27b-it${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it",
-          "workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_baai_bge_base_en_v1_5: {
-      description: "Execute @cf/baai/bge-base-en-v1.5 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-base-en-v1.5${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_bge_base_en_v1_5",
-          "workers_ai_post_run_cf_baai_bge_base_en_v1_5-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_baai_bge_base_en_v1_5",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_baai_bge_large_en_v1_5: {
-      description: "Execute @cf/baai/bge-large-en-v1.5 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-large-en-v1.5${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_bge_large_en_v1_5",
-          "workers_ai_post_run_cf_baai_bge_large_en_v1_5-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_baai_bge_large_en_v1_5",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_baai_bge_m3: {
-      description: "Execute @cf/baai/bge-m3 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            contexts: z.array(z.object({
-              text: z.string().min(1).optional(),
-            })),
-            query: z.string().min(1).optional(),
-            truncate_inputs: z.boolean().optional().default(false),
-          }),
-          z.object({
-            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            truncate_inputs: z.boolean().optional().default(false),
-          }),
-          z.object({
-            requests: z.array(z.union([
-              z.object({
-                contexts: z.array(z.object({
-                  text: z.string().min(1).optional(),
-                })),
-                query: z.string().min(1).optional(),
-                truncate_inputs: z.boolean().optional().default(false),
-              }),
-              z.object({
-                text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-                truncate_inputs: z.boolean().optional().default(false),
-              }),
-            ])),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-m3${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_bge_m3",
-          "workers_ai_post_run_cf_baai_bge_m3-current",
-          result ?? {},
-        );
-        context.logger.info("Executed workers_ai_post_run_cf_baai_bge_m3", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_baai_bge_reranker_base: {
-      description: "Execute @cf/baai/bge-reranker-base model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        contexts: z.array(z.object({
-          text: z.string().min(1).optional(),
-        })).describe(
-          "List of provided contexts. Note that the index in this array is important, as...",
-        ),
-        query: z.string().min(1).describe(
-          "A query you wish to perform against the provided contexts.",
-        ),
-        top_k: z.number().int().min(1).optional().describe(
-          "Number of returned results starting with the best score.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-reranker-base${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_bge_reranker_base",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_baai_bge_reranker_base {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_baai_bge_small_en_v1_5: {
-      description: "Execute @cf/baai/bge-small-en-v1.5 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-small-en-v1.5${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_bge_small_en_v1_5",
-          "workers_ai_post_run_cf_baai_bge_small_en_v1_5-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_baai_bge_small_en_v1_5",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5: {
-      description: "Execute @cf/baai/nonomni-bge-base-en-v1.5 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-base-en-v1.5${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5",
-          "workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5: {
-      description: "Execute @cf/baai/nonomni-bge-large-en-v1.5 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-large-en-v1.5${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5",
-          "workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_baai_nonomni_bge_m3: {
-      description: "Execute @cf/baai/nonomni-bge-m3 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            contexts: z.array(z.object({
-              text: z.string().min(1).optional(),
-            })),
-            query: z.string().min(1).optional(),
-            truncate_inputs: z.boolean().optional().default(false),
-          }),
-          z.object({
-            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            truncate_inputs: z.boolean().optional().default(false),
-          }),
-          z.object({
-            requests: z.array(z.union([
-              z.object({
-                contexts: z.array(z.object({
-                  text: z.string().min(1).optional(),
-                })),
-                query: z.string().min(1).optional(),
-                truncate_inputs: z.boolean().optional().default(false),
-              }),
-              z.object({
-                text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-                truncate_inputs: z.boolean().optional().default(false),
-              }),
-            ])),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-m3${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_nonomni_bge_m3",
-          "workers_ai_post_run_cf_baai_nonomni_bge_m3-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_baai_nonomni_bge_m3",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5: {
-      description: "Execute @cf/baai/nonomni-bge-small-en-v1.5 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
-              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-small-en-v1.5${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5",
-          "workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_black_forest_labs_flux_1_schnell: {
-      description: "Execute @cf/black-forest-labs/flux-1-schnell model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        prompt: z.string().min(1).max(2048).describe(
-          "A text description of the image you want to generate.",
-        ),
-        steps: z.number().int().max(8).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take lon...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_black_forest_labs_flux_1_schnell",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_black_forest_labs_flux_1_schnell {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_black_forest_labs_flux_2_dev: {
-      description: "Execute @cf/black-forest-labs/flux-2-dev model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        multipart: z.object({
-          body: z.object({}).optional(),
-          contentType: z.string().optional(),
-        }),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-dev${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_black_forest_labs_flux_2_dev",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_black_forest_labs_flux_2_dev {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b: {
-      description: "Execute @cf/black-forest-labs/flux-2-klein-4b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        multipart: z.object({
-          body: z.object({}).optional(),
-          contentType: z.string().optional(),
-        }),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-klein-4b${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b: {
-      description: "Execute @cf/black-forest-labs/flux-2-klein-9b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        multipart: z.object({
-          body: z.object({}).optional(),
-          contentType: z.string().optional(),
-        }),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-klein-9b${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning: {
-      description: "Execute @cf/bytedance/stable-diffusion-xl-lightning model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        guidance: z.number().optional().describe(
-          "Controls how closely the generated image should adhere to the prompt; higher ...",
-        ),
-        height: z.number().int().min(256).max(2048).optional().describe(
-          "The height of the generated image in pixels",
-        ),
-        image: z.array(z.number()).optional().describe(
-          "For use with img2img tasks. An array of integers that represent the image dat...",
-        ),
-        image_b64: z.string().optional().describe(
-          "For use with img2img tasks. A base64-encoded string of the input image",
-        ),
-        mask: z.array(z.number()).optional().describe(
-          "An array representing An array of integers that represent mask image data for...",
-        ),
-        negative_prompt: z.string().optional().describe(
-          "Text describing elements to avoid in the generated image",
-        ),
-        num_steps: z.number().int().max(20).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take longer",
-        ),
-        prompt: z.string().min(1).describe(
-          "A text description of the image you want to generate",
-        ),
-        seed: z.number().int().optional().describe(
-          "Random seed for reproducibility of the image generation",
-        ),
-        strength: z.number().optional().describe(
-          "A value between 0 and 1 indicating how strongly to apply the transformation d...",
-        ),
-        width: z.number().int().min(256).max(2048).optional().describe(
-          "The width of the generated image in pixels",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_aura: {
-      description: "Open Websocket connection with @cf/deepgram/aura model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_aura",
-          "workers_ai_post_websocket_run_cf_deepgram_aura-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_aura",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_aura_1: {
-      description: "Open Websocket connection with @cf/deepgram/aura-1 model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-1`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_aura_1",
-          "workers_ai_post_websocket_run_cf_deepgram_aura_1-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_1",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_deepgram_aura_1: {
-      description: "Execute @cf/deepgram/aura-1 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        bit_rate: z.number().optional().describe(
-          "The bitrate of the audio in bits per second. Choose from predefined ranges or...",
-        ),
-        container: z.enum(["none", "wav", "ogg"]).optional().describe(
-          "Container specifies the file format wrapper for the output audio. The availab...",
-        ),
-        encoding: z.enum([
-          "linear16",
-          "flac",
-          "mulaw",
-          "alaw",
-          "mp3",
-          "opus",
-          "aac",
-        ]).optional().describe("Encoding of the output audio."),
-        sample_rate: z.number().optional().describe(
-          "Sample Rate specifies the sample rate for the output audio. Based on the enco...",
-        ),
-        speaker: z.enum([
-          "angus",
-          "asteria",
-          "arcas",
-          "orion",
-          "orpheus",
-          "athena",
-          "luna",
-          "zeus",
-          "perseus",
-          "helios",
-          "hera",
-          "stella",
-        ]).optional().describe("Speaker used to produce the audio."),
-        text: z.string().describe("The text content to be converted to speech"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-1${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_deepgram_aura_1",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_deepgram_aura_1 {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_aura_1_internal: {
-      description:
-        "Open Websocket connection with @cf/deepgram/aura-1-internal model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-1-internal`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_aura_1_internal",
-          "workers_ai_post_websocket_run_cf_deepgram_aura_1_internal-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_1_internal",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_aura_2: {
-      description: "Open Websocket connection with @cf/deepgram/aura-2 model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_aura_2",
-          "workers_ai_post_websocket_run_cf_deepgram_aura_2-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_aura_2_en: {
-      description:
-        "Open Websocket connection with @cf/deepgram/aura-2-en model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-en`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_aura_2_en",
-          "workers_ai_post_websocket_run_cf_deepgram_aura_2_en-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_en",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_deepgram_aura_2_en: {
-      description: "Execute @cf/deepgram/aura-2-en model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        bit_rate: z.number().optional().describe(
-          "The bitrate of the audio in bits per second. Choose from predefined ranges or...",
-        ),
-        container: z.enum(["none", "wav", "ogg"]).optional().describe(
-          "Container specifies the file format wrapper for the output audio. The availab...",
-        ),
-        encoding: z.enum([
-          "linear16",
-          "flac",
-          "mulaw",
-          "alaw",
-          "mp3",
-          "opus",
-          "aac",
-        ]).optional().describe("Encoding of the output audio."),
-        sample_rate: z.number().optional().describe(
-          "Sample Rate specifies the sample rate for the output audio. Based on the enco...",
-        ),
-        speaker: z.enum([
-          "amalthea",
-          "andromeda",
-          "apollo",
-          "arcas",
-          "aries",
-          "asteria",
-          "athena",
-          "atlas",
-          "aurora",
-          "callista",
-          "cora",
-          "cordelia",
-          "delia",
-          "draco",
-          "electra",
-          "harmonia",
-          "helena",
-          "hera",
-          "hermes",
-          "hyperion",
-          "iris",
-          "janus",
-          "juno",
-          "jupiter",
-          "luna",
-          "mars",
-          "minerva",
-          "neptune",
-          "odysseus",
-          "ophelia",
-          "orion",
-          "orpheus",
-          "pandora",
-          "phoebe",
-          "pluto",
-          "saturn",
-          "thalia",
-          "theia",
-          "vesta",
-          "zeus",
-        ]).optional().describe("Speaker used to produce the audio."),
-        text: z.string().optional().describe(
-          "The text content to be converted to speech",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-en${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_deepgram_aura_2_en",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_deepgram_aura_2_en {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws: {
-      description:
-        "Open Websocket connection with @cf/deepgram/aura-2-en-ws model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-en-ws`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws",
-          "workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_aura_2_es: {
-      description:
-        "Open Websocket connection with @cf/deepgram/aura-2-es model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-es`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_aura_2_es",
-          "workers_ai_post_websocket_run_cf_deepgram_aura_2_es-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_es",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_deepgram_aura_2_es: {
-      description: "Execute @cf/deepgram/aura-2-es model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        bit_rate: z.number().optional().describe(
-          "The bitrate of the audio in bits per second. Choose from predefined ranges or...",
-        ),
-        container: z.enum(["none", "wav", "ogg"]).optional().describe(
-          "Container specifies the file format wrapper for the output audio. The availab...",
-        ),
-        encoding: z.enum([
-          "linear16",
-          "flac",
-          "mulaw",
-          "alaw",
-          "mp3",
-          "opus",
-          "aac",
-        ]).optional().describe("Encoding of the output audio."),
-        sample_rate: z.number().optional().describe(
-          "Sample Rate specifies the sample rate for the output audio. Based on the enco...",
-        ),
-        speaker: z.enum([
-          "sirio",
-          "nestor",
-          "carina",
-          "celeste",
-          "alvaro",
-          "diana",
-          "aquila",
-          "selena",
-          "estrella",
-          "javier",
-        ]).optional().describe("Speaker used to produce the audio."),
-        text: z.string().optional().describe(
-          "The text content to be converted to speech",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-es${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_deepgram_aura_2_es",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_deepgram_aura_2_es {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_flux: {
-      description: "Open Websocket connection with @cf/deepgram/flux model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/flux`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_flux",
-          "workers_ai_post_websocket_run_cf_deepgram_flux-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_flux",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_deepgram_flux: {
-      description: "Execute @cf/deepgram/flux model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        eager_eot_threshold: z.string().optional().describe(
-          "End-of-turn confidence required to fire an eager end-of-turn event. When set,...",
-        ),
-        encoding: z.enum(["linear16"]).optional().describe(
-          "Encoding of the audio stream. Currently only supports raw signed little-endia...",
-        ),
-        eot_threshold: z.string().optional().describe(
-          "End-of-turn confidence required to finish a turn. Valid Values 0.5 - 0.9.",
-        ),
-        eot_timeout_ms: z.string().regex(new RegExp("^[0-9]+$")).optional()
-          .describe(
-            "A turn will be finished when this much time has passed after speech, regardle...",
-          ),
-        keyterm: z.string().optional().describe(
-          "Keyterm prompting can improve recognition of specialized terminology. Pass mu...",
-        ),
-        mip_opt_out: z.enum(["true", "false"]).optional().describe(
-          "Opts out requests from the Deepgram Model Improvement Program. Refer to Deepg...",
-        ),
-        sample_rate: z.string().regex(new RegExp("^[0-9]+$")).optional()
-          .describe("Sample rate of the audio stream in Hz."),
-        tag: z.string().optional().describe(
-          "Label your requests for the purpose of identification during usage reporting",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/flux${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_deepgram_flux",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_deepgram_flux {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_nova_3: {
-      description: "Open Websocket connection with @cf/deepgram/nova-3 model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/nova-3`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_nova_3",
-          "workers_ai_post_websocket_run_cf_deepgram_nova_3-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_deepgram_nova_3: {
-      description: "Execute @cf/deepgram/nova-3 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        audio: z.object({
-          body: z.object({}),
-          contentType: z.string(),
-        }),
-        channels: z.number().optional().describe(
-          "The number of channels in the submitted audio",
-        ),
-        custom_intent: z.string().optional().describe(
-          "Custom intents you want the model to detect within your input audio if present",
-        ),
-        custom_intent_mode: z.enum(["extended", "strict"]).optional().describe(
-          "Sets how the model will interpret intents submitted to the custom_intent para...",
-        ),
-        custom_topic: z.string().optional().describe(
-          "Custom topics you want the model to detect within your input audio or text if...",
-        ),
-        custom_topic_mode: z.enum(["extended", "strict"]).optional().describe(
-          "Sets how the model will interpret strings submitted to the custom_topic param...",
-        ),
-        detect_entities: z.boolean().optional().describe(
-          "Identifies and extracts key entities from content in submitted audio",
-        ),
-        detect_language: z.boolean().optional().describe(
-          "Identifies the dominant language spoken in submitted audio",
-        ),
-        diarize: z.boolean().optional().describe(
-          "Recognize speaker changes. Each word in the transcript will be assigned a spe...",
-        ),
-        dictation: z.boolean().optional().describe(
-          "Identify and extract key entities from content in submitted audio",
-        ),
-        encoding: z.enum([
-          "linear16",
-          "flac",
-          "mulaw",
-          "amr-nb",
-          "amr-wb",
-          "opus",
-          "speex",
-          "g729",
-        ]).optional().describe(
-          "Specify the expected encoding of your submitted audio",
-        ),
-        endpointing: z.string().optional().describe(
-          "Indicates how long model will wait to detect whether a speaker has finished s...",
-        ),
-        extra: z.string().optional().describe(
-          "Arbitrary key-value pairs that are attached to the API response for usage in ...",
-        ),
-        filler_words: z.boolean().optional().describe(
-          "Filler Words can help transcribe interruptions in your audio, like 'uh' and 'um'",
-        ),
-        interim_results: z.boolean().optional().describe(
-          "Specifies whether the streaming endpoint should provide ongoing transcription...",
-        ),
-        keyterm: z.string().optional().describe(
-          "Key term prompting can boost or suppress specialized terminology and brands.",
-        ),
-        keywords: z.string().optional().describe(
-          "Keywords can boost or suppress specialized terminology and brands.",
-        ),
-        language: z.string().optional().describe(
-          "The BCP-47 language tag that hints at the primary spoken language. Depending ...",
-        ),
-        measurements: z.boolean().optional().describe(
-          "Spoken measurements will be converted to their corresponding abbreviations.",
-        ),
-        mip_opt_out: z.boolean().optional().describe(
-          "Opts out requests from the Deepgram Model Improvement Program. Refer to our D...",
-        ),
-        mode: z.enum(["general", "medical", "finance"]).optional().describe(
-          "Mode of operation for the model representing broad area of topic that will be...",
-        ),
-        multichannel: z.boolean().optional().describe(
-          "Transcribe each audio channel independently.",
-        ),
-        numerals: z.boolean().optional().describe(
-          "Numerals converts numbers from written format to numerical format.",
-        ),
-        paragraphs: z.boolean().optional().describe(
-          "Splits audio into paragraphs to improve transcript readability.",
-        ),
-        profanity_filter: z.boolean().optional().describe(
-          "Profanity Filter looks for recognized profanity and converts it to the neares...",
-        ),
-        punctuate: z.boolean().optional().describe(
-          "Add punctuation and capitalization to the transcript.",
-        ),
-        redact: z.string().optional().describe(
-          "Redaction removes sensitive information from your transcripts.",
-        ),
-        replace: z.string().optional().describe(
-          "Search for terms or phrases in submitted audio and replaces them.",
-        ),
-        search: z.string().optional().describe(
-          "Search for terms or phrases in submitted audio.",
-        ),
-        sentiment: z.boolean().optional().describe(
-          "Recognizes the sentiment throughout a transcript or text.",
-        ),
-        smart_format: z.boolean().optional().describe(
-          "Apply formatting to transcript output. When set to true, additional formattin...",
-        ),
-        topics: z.boolean().optional().describe(
-          "Detect topics throughout a transcript or text.",
-        ),
-        utt_split: z.number().optional().describe(
-          "Seconds to wait before detecting a pause between words in submitted audio.",
-        ),
-        utterance_end_ms: z.boolean().optional().describe(
-          "Indicates how long model will wait to send an UtteranceEnd message after a wo...",
-        ),
-        utterances: z.boolean().optional().describe(
-          "Segments speech into meaningful semantic units.",
-        ),
-        vad_events: z.boolean().optional().describe(
-          "Indicates that speech has started. You'll begin receiving Speech Started mess...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/nova-3${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_deepgram_nova_3",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_deepgram_nova_3 {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_nova_3_internal: {
-      description:
-        "Open Websocket connection with @cf/deepgram/nova-3-internal model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/nova-3-internal`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_nova_3_internal",
-          "workers_ai_post_websocket_run_cf_deepgram_nova_3_internal-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3_internal",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_deepgram_nova_3_ws: {
-      description:
-        "Open Websocket connection with @cf/deepgram/nova-3-ws model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/nova-3-ws`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_deepgram_nova_3_ws",
-          "workers_ai_post_websocket_run_cf_deepgram_nova_3_ws-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3_ws",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct: {
-      description: "Execute @cf/deepseek-ai/deepseek-math-7b-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepseek-ai/deepseek-math-7b-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct",
-          "workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b: {
-      description:
-        "Execute @cf/deepseek-ai/deepseek-r1-distill-qwen-32b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b",
-          "workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_defog_sqlcoder_7b_2: {
-      description: "Execute @cf/defog/sqlcoder-7b-2 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/defog/sqlcoder-7b-2${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_defog_sqlcoder_7b_2",
-          "workers_ai_post_run_cf_defog_sqlcoder_7b_2-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_defog_sqlcoder_7b_2",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_facebook_bart_large_cnn: {
-      description: "Execute @cf/facebook/bart-large-cnn model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        input_text: z.string().min(1).describe(
-          "The text that you want the model to summarize",
-        ),
-        max_length: z.number().int().optional().describe(
-          "The maximum length of the generated summary in tokens",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/facebook/bart-large-cnn${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_facebook_bart_large_cnn",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_facebook_bart_large_cnn {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn: {
-      description: "Execute @cf/facebook/nonomni-bart-large-cnn model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        input_text: z.string().min(1).describe(
-          "The text that you want the model to summarize",
-        ),
-        max_length: z.number().int().optional().describe(
-          "The maximum length of the generated summary in tokens",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/facebook/nonomni-bart-large-cnn${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16: {
-      description: "Execute @cf/fblgit/una-cybertron-7b-v2-bf16 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/fblgit/una-cybertron-7b-v2-bf16${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16",
-          "workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_google_embeddinggemma_300m: {
-      description: "Execute @cf/google/embeddinggemma-300m model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/embeddinggemma-300m${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_google_embeddinggemma_300m",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_google_embeddinggemma_300m {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_google_gemma_2b_it_lora: {
-      description: "Execute @cf/google/gemma-2b-it-lora model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/gemma-2b-it-lora${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_google_gemma_2b_it_lora",
-          "workers_ai_post_run_cf_google_gemma_2b_it_lora-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_google_gemma_2b_it_lora",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_google_gemma_3_12b_it: {
-      description: "Execute @cf/google/gemma-3-12b-it model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  image_url: z.object({
-                    url: z.unknown().optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]).optional(),
-              role: z.string().optional(),
-            })),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/gemma-3-12b-it${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_google_gemma_3_12b_it",
-          "workers_ai_post_run_cf_google_gemma_3_12b_it-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_google_gemma_3_12b_it",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_google_gemma_4_26b_a4b_it: {
-      description: "Execute @cf/google/gemma-4-26b-a4b-it model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/gemma-4-26b-a4b-it${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_google_gemma_4_26b_a4b_it",
-          "workers_ai_post_run_cf_google_gemma_4_26b_a4b_it-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_google_gemma_4_26b_a4b_it",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_google_gemma_7b_it_lora: {
-      description: "Execute @cf/google/gemma-7b-it-lora model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/gemma-7b-it-lora${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_google_gemma_7b_it_lora",
-          "workers_ai_post_run_cf_google_gemma_7b_it_lora-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_google_gemma_7b_it_lora",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m: {
-      description: "Execute @cf/google/nonomni-embeddinggemma-300m model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        text: z.union([z.string(), z.array(z.string())]).describe(
-          "Input text to embed. Can be a single string or a list of strings.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/nonomni-embeddinggemma-300m${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8: {
-      description: "Execute @cf/huggingface/distilbert-sst-2-int8 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        text: z.string().min(1).describe("The text that you want to classify"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/huggingface/distilbert-sst-2-int8${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8 {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8: {
-      description:
-        "Execute @cf/huggingface/nonomni-distilbert-sst-2-int8 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        text: z.string().min(1).describe("The text that you want to classify"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/huggingface/nonomni-distilbert-sst-2-int8${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8 {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro: {
-      description: "Execute @cf/ibm-granite/granite-4.0-h-micro model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/ibm-granite/granite-4.0-h-micro${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro",
-          "workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_leonardo_lucid_origin: {
-      description: "Execute @cf/leonardo/lucid-origin model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        guidance: z.number().min(0).max(10).optional().describe(
-          "Controls how closely the generated image should adhere to the prompt; higher ...",
-        ),
-        height: z.number().int().min(0).max(2500).optional().describe(
-          "The height of the generated image in pixels",
-        ),
-        num_steps: z.number().int().min(1).max(40).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take longer",
-        ),
-        prompt: z.string().min(1).describe(
-          "A text description of the image you want to generate.",
-        ),
-        seed: z.number().int().min(0).optional().describe(
-          "Random seed for reproducibility of the image generation",
-        ),
-        steps: z.number().int().min(1).max(40).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take longer",
-        ),
-        width: z.number().int().min(0).max(2500).optional().describe(
-          "The width of the generated image in pixels",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/leonardo/lucid-origin${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_leonardo_lucid_origin",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_leonardo_lucid_origin {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_leonardo_phoenix_1_0: {
-      description: "Execute @cf/leonardo/phoenix-1.0 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        guidance: z.number().min(2).max(10).optional().describe(
-          "Controls how closely the generated image should adhere to the prompt; higher ...",
-        ),
-        height: z.number().int().min(0).max(2048).optional().describe(
-          "The height of the generated image in pixels",
-        ),
-        negative_prompt: z.string().min(1).optional().describe(
-          "Specify what to exclude from the generated images",
-        ),
-        num_steps: z.number().int().min(1).max(50).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take longer",
-        ),
-        prompt: z.string().min(1).describe(
-          "A text description of the image you want to generate.",
-        ),
-        seed: z.number().int().min(0).optional().describe(
-          "Random seed for reproducibility of the image generation",
-        ),
-        width: z.number().int().min(0).max(2048).optional().describe(
-          "The width of the generated image in pixels",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/leonardo/phoenix-1.0${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_leonardo_phoenix_1_0",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_leonardo_phoenix_1_0 {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_lykon_dreamshaper_8_lcm: {
-      description: "Execute @cf/lykon/dreamshaper-8-lcm model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        guidance: z.number().optional().describe(
-          "Controls how closely the generated image should adhere to the prompt; higher ...",
-        ),
-        height: z.number().int().min(256).max(2048).optional().describe(
-          "The height of the generated image in pixels",
-        ),
-        image: z.array(z.number()).optional().describe(
-          "For use with img2img tasks. An array of integers that represent the image dat...",
-        ),
-        image_b64: z.string().optional().describe(
-          "For use with img2img tasks. A base64-encoded string of the input image",
-        ),
-        mask: z.array(z.number()).optional().describe(
-          "An array representing An array of integers that represent mask image data for...",
-        ),
-        negative_prompt: z.string().optional().describe(
-          "Text describing elements to avoid in the generated image",
-        ),
-        num_steps: z.number().int().max(20).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take longer",
-        ),
-        prompt: z.string().min(1).describe(
-          "A text description of the image you want to generate",
-        ),
-        seed: z.number().int().optional().describe(
-          "Random seed for reproducibility of the image generation",
-        ),
-        strength: z.number().optional().describe(
-          "A value between 0 and 1 indicating how strongly to apply the transformation d...",
-        ),
-        width: z.number().int().min(256).max(2048).optional().describe(
-          "The width of the generated image in pixels",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/lykon/dreamshaper-8-lcm${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_lykon_dreamshaper_8_lcm",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_lykon_dreamshaper_8_lcm {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora: {
-      description: "Execute @cf/meta-llama/llama-2-7b-chat-hf-lora model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta-llama/llama-2-7b-chat-hf-lora${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora",
-          "workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16: {
-      description: "Execute @cf/meta/llama-2-7b-chat-fp16 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-2-7b-chat-fp16${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16",
-          "workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_2_7b_chat_int8: {
-      description: "Execute @cf/meta/llama-2-7b-chat-int8 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-2-7b-chat-int8${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_2_7b_chat_int8",
-          "workers_ai_post_run_cf_meta_llama_2_7b_chat_int8-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_2_7b_chat_int8",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_8b_instruct: {
-      description: "Execute @cf/meta/llama-3-8b-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3-8b-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_8b_instruct",
-          "workers_ai_post_run_cf_meta_llama_3_8b_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_8b_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq: {
-      description: "Execute @cf/meta/llama-3-8b-instruct-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3-8b-instruct-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq",
-          "workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast: {
-      description: "Execute @cf/meta/llama-3.1-70b-instruct-fp8-fast model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-70b-instruct-fp8-fast${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast",
-          "workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq: {
-      description: "Execute @cf/meta/llama-3.1-8b-instruct-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq",
-          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8: {
-      description: "Execute @cf/meta/llama-3.1-8b-instruct-fp8 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8",
-          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast: {
-      description: "Execute @cf/meta/llama-3.1-8b-instruct-fp8-fast model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast",
-          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct: {
-      description: "Execute @cf/meta/llama-3.2-11b-vision-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            image: z.union([z.array(z.number()), z.string()]).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            prompt: z.string().min(1).max(131072),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            image: z.union([z.array(z.number()), z.string()]).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  image_url: z.object({
-                    url: z.unknown().optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-                z.object({
-                  image_url: z.object({
-                    url: z.string().regex(new RegExp("^data:*")).optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                }),
-              ]).optional(),
-              role: z.string().optional(),
-              tool_call_id: z.string().optional(),
-            })),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct",
-          "workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_2_1b_instruct: {
-      description: "Execute @cf/meta/llama-3.2-1b-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-1b-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_2_1b_instruct",
-          "workers_ai_post_run_cf_meta_llama_3_2_1b_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_2_1b_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_2_3b_instruct: {
-      description: "Execute @cf/meta/llama-3.2-3b-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-3b-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_2_3b_instruct",
-          "workers_ai_post_run_cf_meta_llama_3_2_3b_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_2_3b_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast: {
-      description: "Execute @cf/meta/llama-3.3-70b-instruct-fp8-fast model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              external_reference: z.string().optional(),
-              frequency_penalty: z.number().min(0).max(2).optional(),
-              max_tokens: z.number().int().optional().default(256),
-              presence_penalty: z.number().min(0).max(2).optional(),
-              prompt: z.string().min(1).optional(),
-              repetition_penalty: z.number().min(0).max(2).optional(),
-              response_format: z.object({
-                json_schema: z.unknown().optional(),
-                type: z.enum(["json_object", "json_schema"]).optional(),
-              }).optional(),
-              seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional().default(false),
-              temperature: z.number().min(0).max(5).optional().default(0.6),
-              top_p: z.number().min(0).max(2).optional(),
-            })).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast",
-          "workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct: {
-      description: "Execute @cf/meta/llama-4-scout-17b-16e-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.15),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  image_url: z.object({
-                    url: z.unknown().optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-                z.object({
-                  image_url: z.object({
-                    url: z.string().regex(new RegExp("^data:*")).optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                }),
-              ]).optional(),
-              role: z.string().optional(),
-              tool_call_id: z.string().optional(),
-            })),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.15),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-          z.object({
-            requests: z.array(z.union([
-              z.object({
-                frequency_penalty: z.number().min(0).max(2).optional(),
-                guided_json: z.object({}).optional(),
-                max_tokens: z.number().int().optional().default(256),
-                presence_penalty: z.number().min(0).max(2).optional(),
-                prompt: z.string().min(1),
-                raw: z.boolean().optional().default(false),
-                repetition_penalty: z.number().min(0).max(2).optional(),
-                response_format: z.object({
-                  json_schema: z.unknown().optional(),
-                  type: z.enum(["json_object", "json_schema"]).optional(),
-                }).optional(),
-                seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional().default(false),
-                temperature: z.number().min(0).max(5).optional().default(0.15),
-                top_k: z.number().int().min(1).max(50).optional(),
-                top_p: z.number().min(0).max(2).optional(),
-              }),
-              z.object({
-                frequency_penalty: z.number().min(0).max(2).optional(),
-                functions: z.array(z.object({
-                  code: z.string(),
-                  name: z.string(),
-                })).optional(),
-                guided_json: z.object({}).optional(),
-                max_tokens: z.number().int().optional().default(256),
-                messages: z.array(z.object({
-                  content: z.union([z.unknown(), z.unknown(), z.unknown()])
-                    .optional(),
-                  role: z.string().optional(),
-                  tool_call_id: z.string().regex(new RegExp("[a-zA-Z0-9]{9}"))
-                    .optional(),
-                })),
-                presence_penalty: z.number().min(0).max(2).optional(),
-                raw: z.boolean().optional().default(false),
-                repetition_penalty: z.number().min(0).max(2).optional(),
-                response_format: z.object({
-                  json_schema: z.unknown().optional(),
-                  type: z.enum(["json_object", "json_schema"]).optional(),
-                }).optional(),
-                seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional().default(false),
-                temperature: z.number().min(0).max(5).optional().default(0.15),
-                tools: z.array(z.union([
-                  z.object({
-                    description: z.unknown(),
-                    name: z.unknown(),
-                    parameters: z.unknown(),
-                  }),
-                  z.object({
-                    function: z.unknown(),
-                    type: z.unknown(),
-                  }),
-                ])).optional(),
-                top_k: z.number().int().min(1).max(50).optional(),
-                top_p: z.number().min(0).max(2).optional(),
-              }),
-            ])),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-4-scout-17b-16e-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct",
-          "workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_meta_llama_guard_3_8b: {
-      description: "Execute @cf/meta/llama-guard-3-8b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        max_tokens: z.number().int().optional().describe(
-          "The maximum number of tokens to generate in the response.",
-        ),
-        messages: z.array(z.object({
-          content: z.string(),
-          role: z.enum(["user", "assistant"]),
-        })).describe(
-          "An array of message objects representing the conversation history.",
-        ),
-        response_format: z.object({
-          type: z.string().optional(),
-        }).optional().describe(
-          "Dictate the output format of the generated response.",
-        ),
-        temperature: z.number().min(0).max(5).optional().describe(
-          "Controls the randomness of the output; higher values produce more random resu...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-guard-3-8b${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_llama_guard_3_8b",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_meta_llama_guard_3_8b {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_meta_m2m100_1_2b: {
-      description: "Execute @cf/meta/m2m100-1.2b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            source_lang: z.string().optional().default("en"),
-            target_lang: z.string(),
-            text: z.string().min(1),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              source_lang: z.string().optional().default("en"),
-              target_lang: z.string(),
-              text: z.string().min(1),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/m2m100-1.2b${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_meta_m2m100_1_2b",
-          "workers_ai_post_run_cf_meta_m2m100_1_2b-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_meta_m2m100_1_2b",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_microsoft_phi_2: {
-      description: "Execute @cf/microsoft/phi-2 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/microsoft/phi-2${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_microsoft_phi_2",
-          "workers_ai_post_run_cf_microsoft_phi_2-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_microsoft_phi_2",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1: {
-      description: "Execute @cf/mistral/mistral-7b-instruct-v0.1 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/mistral/mistral-7b-instruct-v0.1${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1",
-          "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora: {
-      description: "Execute @cf/mistral/mistral-7b-instruct-v0.2-lora model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/mistral/mistral-7b-instruct-v0.2-lora${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora",
-          "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct: {
-      description:
-        "Execute @cf/mistralai/mistral-small-3.1-24b-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.15),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  image_url: z.object({
-                    url: z.unknown().optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-                z.object({
-                  image_url: z.object({
-                    url: z.string().regex(new RegExp("^data:*")).optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                }),
-              ]).optional(),
-              role: z.string().optional(),
-              tool_call_id: z.string().optional(),
-            })),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.15),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/mistralai/mistral-small-3.1-24b-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct",
-          "workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_moonshotai_kimi_k2_5: {
-      description: "Execute @cf/moonshotai/kimi-k2.5 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.5${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_moonshotai_kimi_k2_5",
-          "workers_ai_post_run_cf_moonshotai_kimi_k2_5-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_5",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_moonshotai_kimi_k2_6: {
-      description: "Execute @cf/moonshotai/kimi-k2.6 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.6${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_moonshotai_kimi_k2_6",
-          "workers_ai_post_run_cf_moonshotai_kimi_k2_6-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_6",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_moonshotai_kimi_k2_7_code: {
-      description: "Execute @cf/moonshotai/kimi-k2.7-code model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.7-code${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_moonshotai_kimi_k2_7_code",
-          "workers_ai_post_run_cf_moonshotai_kimi_k2_7_code-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_7_code",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_myshell_ai_melotts: {
-      description: "Execute @cf/myshell-ai/melotts model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        lang: z.string().optional().describe(
-          "The speech language (e.g., 'en' for English, 'fr' for French). Defaults to 'e...",
-        ),
-        prompt: z.string().min(1).describe(
-          "A text description of the audio you want to generate",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/myshell-ai/melotts${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_myshell_ai_melotts",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_myshell_ai_melotts {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b: {
-      description: "Execute @cf/nvidia/nemotron-3-120b-a12b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            audio: z.object({
-              format: z.enum(["wav", "aac", "mp3", "flac", "opus", "pcm16"]),
-              voice: z.union([
-                z.string(),
-                z.object({
-                  id: z.string(),
-                }),
-              ]),
-            }).optional(),
-            chat_template_kwargs: z.object({
-              clear_thinking: z.boolean().optional().default(false),
-              enable_thinking: z.boolean().optional().default(true),
-            }).optional(),
-            frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
-            function_call: z.union([
-              z.enum(["none", "auto"]),
-              z.object({
-                name: z.string(),
-              }),
-            ]).optional(),
-            functions: z.array(z.object({
-              description: z.string().optional(),
-              name: z.string(),
-              parameters: z.object({}).optional(),
-              strict: z.boolean().nullable().optional(),
-            })).optional(),
-            logit_bias: z.object({}).nullable().optional(),
-            logprobs: z.boolean().nullable().optional(),
-            max_completion_tokens: z.number().int().nullable().optional(),
-            max_tokens: z.number().int().nullable().optional(),
-            metadata: z.object({}).nullable().optional(),
-            modalities: z.array(z.enum(["text", "audio"])).nullable()
-              .optional(),
-            model: z.string().optional(),
-            n: z.number().int().min(1).max(128).nullable().optional(),
-            parallel_tool_calls: z.boolean().optional().default(true),
-            prediction: z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string(),
-                  type: z.enum(["text"]),
-                })),
-              ]),
-              type: z.enum(["content"]),
-            }).optional(),
-            presence_penalty: z.number().min(-2).max(2).nullable().optional(),
-            prompt: z.string().min(1),
-            reasoning_effort: z.enum(["low", "medium", "high"]).nullable()
-              .optional(),
-            response_format: z.union([
-              z.object({
-                type: z.enum(["text"]),
-              }),
-              z.object({
-                type: z.enum(["json_object"]),
-              }),
-              z.object({
-                json_schema: z.object({
-                  description: z.string().optional(),
-                  name: z.string(),
-                  schema: z.object({}).optional(),
-                  strict: z.boolean().nullable().optional(),
-                }),
-                type: z.enum(["json_schema"]),
-              }),
-            ]).optional(),
-            seed: z.number().int().nullable().optional(),
-            service_tier: z.enum([
-              "auto",
-              "default",
-              "flex",
-              "scale",
-              "priority",
-            ]).nullable().optional(),
-            stop: z.union([z.string(), z.array(z.string())]).optional(),
-            store: z.boolean().nullable().optional(),
-            stream: z.boolean().nullable().optional(),
-            stream_options: z.object({
-              include_obfuscation: z.boolean().optional(),
-              include_usage: z.boolean().optional(),
-            }).optional(),
-            temperature: z.number().min(0).max(2).nullable().optional(),
-            tool_choice: z.union([
-              z.enum(["none", "auto", "required"]),
-              z.object({
-                function: z.object({
-                  name: z.string(),
-                }),
-                type: z.enum(["function"]),
-              }),
-              z.object({
-                custom: z.object({
-                  name: z.string(),
-                }),
-                type: z.enum(["custom"]),
-              }),
-              z.object({
-                allowed_tools: z.object({
-                  mode: z.enum(["auto", "required"]),
-                  tools: z.array(z.object({})),
-                }),
-                type: z.enum(["allowed_tools"]),
-              }),
-            ]).optional(),
-            tools: z.array(z.union([
-              z.object({
-                function: z.object({
-                  description: z.string().optional(),
-                  name: z.string(),
-                  parameters: z.object({}).optional(),
-                  strict: z.boolean().nullable().optional(),
-                }),
-                type: z.enum(["function"]),
-              }),
-              z.object({
-                custom: z.object({
-                  description: z.string().optional(),
-                  format: z.union([
-                    z.object({
-                      type: z.unknown(),
-                    }),
-                    z.object({
-                      grammar: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ]).optional(),
-                  name: z.string(),
-                }),
-                type: z.enum(["custom"]),
-              }),
-            ])).optional(),
-            top_logprobs: z.number().int().min(0).max(20).nullable().optional(),
-            top_p: z.number().min(0).max(1).nullable().optional(),
-            user: z.string().optional(),
-            web_search_options: z.object({
-              search_context_size: z.enum(["low", "medium", "high"]).optional()
-                .default("medium"),
-              user_location: z.object({
-                approximate: z.object({
-                  city: z.string().optional(),
-                  country: z.string().optional(),
-                  region: z.string().optional(),
-                  timezone: z.string().optional(),
-                }),
-                type: z.enum(["approximate"]),
-              }).optional(),
-            }).optional(),
-          }),
-          z.object({
-            audio: z.object({
-              format: z.enum(["wav", "aac", "mp3", "flac", "opus", "pcm16"]),
-              voice: z.union([
-                z.string(),
-                z.object({
-                  id: z.string(),
-                }),
-              ]),
-            }).optional(),
-            chat_template_kwargs: z.object({
-              clear_thinking: z.boolean().optional().default(false),
-              enable_thinking: z.boolean().optional().default(true),
-            }).optional(),
-            frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
-            function_call: z.union([
-              z.enum(["none", "auto"]),
-              z.object({
-                name: z.string(),
-              }),
-            ]).optional(),
-            functions: z.array(z.object({
-              description: z.string().optional(),
-              name: z.string(),
-              parameters: z.object({}).optional(),
-              strict: z.boolean().nullable().optional(),
-            })).optional(),
-            logit_bias: z.object({}).nullable().optional(),
-            logprobs: z.boolean().nullable().optional(),
-            max_completion_tokens: z.number().int().nullable().optional(),
-            max_tokens: z.number().int().nullable().optional(),
-            messages: z.array(z.union([
-              z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    text: z.unknown(),
-                    type: z.unknown(),
-                  })),
-                ]),
-                name: z.string().optional(),
-                role: z.enum(["developer"]),
-              }),
-              z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    text: z.unknown(),
-                    type: z.unknown(),
-                  })),
-                ]),
-                name: z.string().optional(),
-                role: z.enum(["system"]),
-              }),
-              z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    file: z.unknown().optional(),
-                    image_url: z.unknown().optional(),
-                    input_audio: z.unknown().optional(),
-                    text: z.unknown().optional(),
-                    type: z.unknown(),
-                    video_url: z.unknown().optional(),
-                  })),
-                ]),
-                name: z.string().optional(),
-                role: z.enum(["user"]),
-              }),
-              z.object({
-                audio: z.object({
-                  id: z.string(),
-                }).optional(),
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    refusal: z.unknown().optional(),
-                    text: z.unknown().optional(),
-                    type: z.unknown(),
-                  })),
-                ]).optional(),
-                function_call: z.object({
-                  arguments: z.string(),
-                  name: z.string(),
-                }).optional(),
-                name: z.string().optional(),
-                refusal: z.string().nullable().optional(),
-                role: z.enum(["assistant"]),
-                tool_calls: z.array(z.union([
-                  z.object({
-                    function: z.unknown(),
-                    id: z.unknown(),
-                    type: z.unknown(),
-                  }),
-                  z.object({
-                    custom: z.unknown(),
-                    id: z.unknown(),
-                    type: z.unknown(),
-                  }),
-                ])).optional(),
-              }),
-              z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    text: z.unknown(),
-                    type: z.unknown(),
-                  })),
-                ]),
-                role: z.enum(["tool"]),
-                tool_call_id: z.string(),
-              }),
-              z.object({
-                content: z.string(),
-                name: z.string(),
-                role: z.enum(["function"]),
-              }),
-            ])),
-            metadata: z.object({}).nullable().optional(),
-            modalities: z.array(z.enum(["text", "audio"])).nullable()
-              .optional(),
-            model: z.string().optional(),
-            n: z.number().int().min(1).max(128).nullable().optional(),
-            parallel_tool_calls: z.boolean().optional().default(true),
-            prediction: z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string(),
-                  type: z.enum(["text"]),
-                })),
-              ]),
-              type: z.enum(["content"]),
-            }).optional(),
-            presence_penalty: z.number().min(-2).max(2).nullable().optional(),
-            reasoning_effort: z.enum(["low", "medium", "high"]).nullable()
-              .optional(),
-            response_format: z.union([
-              z.object({
-                type: z.enum(["text"]),
-              }),
-              z.object({
-                type: z.enum(["json_object"]),
-              }),
-              z.object({
-                json_schema: z.object({
-                  description: z.string().optional(),
-                  name: z.string(),
-                  schema: z.object({}).optional(),
-                  strict: z.boolean().nullable().optional(),
-                }),
-                type: z.enum(["json_schema"]),
-              }),
-            ]).optional(),
-            seed: z.number().int().nullable().optional(),
-            service_tier: z.enum([
-              "auto",
-              "default",
-              "flex",
-              "scale",
-              "priority",
-            ]).nullable().optional(),
-            stop: z.union([z.string(), z.array(z.string())]).optional(),
-            store: z.boolean().nullable().optional(),
-            stream: z.boolean().nullable().optional(),
-            stream_options: z.object({
-              include_obfuscation: z.boolean().optional(),
-              include_usage: z.boolean().optional(),
-            }).optional(),
-            temperature: z.number().min(0).max(2).nullable().optional(),
-            tool_choice: z.union([
-              z.enum(["none", "auto", "required"]),
-              z.object({
-                function: z.object({
-                  name: z.string(),
-                }),
-                type: z.enum(["function"]),
-              }),
-              z.object({
-                custom: z.object({
-                  name: z.string(),
-                }),
-                type: z.enum(["custom"]),
-              }),
-              z.object({
-                allowed_tools: z.object({
-                  mode: z.enum(["auto", "required"]),
-                  tools: z.array(z.object({})),
-                }),
-                type: z.enum(["allowed_tools"]),
-              }),
-            ]).optional(),
-            tools: z.array(z.union([
-              z.object({
-                function: z.object({
-                  description: z.string().optional(),
-                  name: z.string(),
-                  parameters: z.object({}).optional(),
-                  strict: z.boolean().nullable().optional(),
-                }),
-                type: z.enum(["function"]),
-              }),
-              z.object({
-                custom: z.object({
-                  description: z.string().optional(),
-                  format: z.union([
-                    z.object({
-                      type: z.unknown(),
-                    }),
-                    z.object({
-                      grammar: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ]).optional(),
-                  name: z.string(),
-                }),
-                type: z.enum(["custom"]),
-              }),
-            ])).optional(),
-            top_logprobs: z.number().int().min(0).max(20).nullable().optional(),
-            top_p: z.number().min(0).max(1).nullable().optional(),
-            user: z.string().optional(),
-            web_search_options: z.object({
-              search_context_size: z.enum(["low", "medium", "high"]).optional()
-                .default("medium"),
-              user_location: z.object({
-                approximate: z.object({
-                  city: z.string().optional(),
-                  country: z.string().optional(),
-                  region: z.string().optional(),
-                  timezone: z.string().optional(),
-                }),
-                type: z.enum(["approximate"]),
-              }).optional(),
-            }).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/nvidia/nemotron-3-120b-a12b${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b",
-          "workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b:
-      {
-        description:
-          "Open Websocket connection with @cf/nvidia/nemotron-speech-streaming-en-0.6b model.",
-        arguments: z.object({}),
-        execute: async (
-          _args: Record<string, unknown>,
-          context: {
-            globalArgs: Record<string, string>;
-            writeResource: (
-              spec: string,
-              instance: string,
-              data: unknown,
-            ) => Promise<{ name: string }>;
-            logger: {
-              info: (msg: string, props: Record<string, unknown>) => void;
-            };
-          },
-        ) => {
-          const { apiToken, accountId } = context.globalArgs;
-          const result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/ai/run/@cf/nvidia/nemotron-speech-streaming-en-0.6b`,
-          );
-
-          const handle = await context.writeResource(
-            "workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
-            "workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b-current",
-            result,
-          );
-          context.logger.info(
-            "Fetched workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
-            {},
-          );
-          return { dataHandles: [handle] };
-        },
-      },
-    workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b: {
-      description:
-        "Execute @cf/nvidia/nemotron-speech-streaming-en-0.6b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            audio: z.object({
-              body: z.object({}),
-              contentType: z.string(),
-            }),
-          }),
-          z.object({
-            audio: z.string(),
-            channels: z.number().int().optional().default(1),
-            encoding: z.enum(["wav", "flac", "ogg", "linear16"]).optional()
-              .default("wav"),
-            sample_rate: z.number().int().optional().default(16000),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/nvidia/nemotron-speech-streaming-en-0.6b${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
-          "workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_openai_gpt_oss_120b: {
-      description: "Execute @cf/openai/gpt-oss-120b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.union([
-            z.object({
-              frequency_penalty: z.number().min(-2).max(2).optional(),
-              lora: z.string().optional(),
-              max_tokens: z.number().int().optional().default(256),
-              presence_penalty: z.number().min(-2).max(2).optional(),
-              prompt: z.string().min(1),
-              raw: z.boolean().optional().default(false),
-              repetition_penalty: z.number().min(0).max(2).optional(),
-              response_format: z.object({
-                json_schema: z.unknown().optional(),
-                type: z.enum(["json_object", "json_schema"]).optional(),
-              }).optional(),
-              seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional().default(false),
-              temperature: z.number().min(0).max(5).optional().default(0.6),
-              top_k: z.number().int().min(1).max(50).optional(),
-              top_p: z.number().min(0.001).max(1).optional(),
-            }),
-            z.object({
-              frequency_penalty: z.number().min(-2).max(2).optional(),
-              functions: z.array(z.object({
-                code: z.string(),
-                name: z.string(),
-              })).optional(),
-              max_tokens: z.number().int().optional().default(256),
-              messages: z.array(z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    text: z.unknown().optional(),
-                    type: z.unknown().optional(),
-                  })),
-                ]),
-                role: z.string(),
-              })),
-              presence_penalty: z.number().min(-2).max(2).optional(),
-              raw: z.boolean().optional().default(false),
-              repetition_penalty: z.number().min(0).max(2).optional(),
-              response_format: z.object({
-                json_schema: z.unknown().optional(),
-                type: z.enum(["json_object", "json_schema"]).optional(),
-              }).optional(),
-              seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional().default(false),
-              temperature: z.number().min(0).max(5).optional().default(0.6),
-              tools: z.array(z.union([
-                z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                z.object({
-                  function: z.object({
-                    description: z.string(),
-                    name: z.string(),
-                    parameters: z.object({
-                      properties: z.unknown(),
-                      required: z.unknown().optional(),
-                      type: z.unknown(),
-                    }),
-                  }),
-                  type: z.string(),
-                }),
-              ])).optional(),
-              top_k: z.number().int().min(1).max(50).optional(),
-              top_p: z.number().min(0.001).max(1).optional(),
-            }),
-          ]),
-          z.object({
-            input: z.union([z.string(), z.array(z.unknown())]),
-            reasoning: z.object({
-              effort: z.enum(["low", "medium", "high"]).optional(),
-              summary: z.enum(["auto", "concise", "detailed"]).optional(),
-            }).optional(),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              input: z.union([z.string(), z.array(z.unknown())]),
-              reasoning: z.object({
-                effort: z.enum(["low", "medium", "high"]).optional(),
-                summary: z.enum(["auto", "concise", "detailed"]).optional(),
-              }).optional(),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/gpt-oss-120b${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_openai_gpt_oss_120b",
-          "workers_ai_post_run_cf_openai_gpt_oss_120b-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_openai_gpt_oss_120b",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_openai_gpt_oss_20b: {
-      description: "Execute @cf/openai/gpt-oss-20b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.union([
-            z.object({
-              frequency_penalty: z.number().min(-2).max(2).optional(),
-              lora: z.string().optional(),
-              max_tokens: z.number().int().optional().default(256),
-              presence_penalty: z.number().min(-2).max(2).optional(),
-              prompt: z.string().min(1),
-              raw: z.boolean().optional().default(false),
-              repetition_penalty: z.number().min(0).max(2).optional(),
-              response_format: z.object({
-                json_schema: z.unknown().optional(),
-                type: z.enum(["json_object", "json_schema"]).optional(),
-              }).optional(),
-              seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional().default(false),
-              temperature: z.number().min(0).max(5).optional().default(0.6),
-              top_k: z.number().int().min(1).max(50).optional(),
-              top_p: z.number().min(0.001).max(1).optional(),
-            }),
-            z.object({
-              frequency_penalty: z.number().min(-2).max(2).optional(),
-              functions: z.array(z.object({
-                code: z.string(),
-                name: z.string(),
-              })).optional(),
-              max_tokens: z.number().int().optional().default(256),
-              messages: z.array(z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    text: z.unknown().optional(),
-                    type: z.unknown().optional(),
-                  })),
-                ]),
-                role: z.string(),
-              })),
-              presence_penalty: z.number().min(-2).max(2).optional(),
-              raw: z.boolean().optional().default(false),
-              repetition_penalty: z.number().min(0).max(2).optional(),
-              response_format: z.object({
-                json_schema: z.unknown().optional(),
-                type: z.enum(["json_object", "json_schema"]).optional(),
-              }).optional(),
-              seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional().default(false),
-              temperature: z.number().min(0).max(5).optional().default(0.6),
-              tools: z.array(z.union([
-                z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                z.object({
-                  function: z.object({
-                    description: z.string(),
-                    name: z.string(),
-                    parameters: z.object({
-                      properties: z.unknown(),
-                      required: z.unknown().optional(),
-                      type: z.unknown(),
-                    }),
-                  }),
-                  type: z.string(),
-                }),
-              ])).optional(),
-              top_k: z.number().int().min(1).max(50).optional(),
-              top_p: z.number().min(0.001).max(1).optional(),
-            }),
-          ]),
-          z.object({
-            input: z.union([z.string(), z.array(z.unknown())]),
-            reasoning: z.object({
-              effort: z.enum(["low", "medium", "high"]).optional(),
-              summary: z.enum(["auto", "concise", "detailed"]).optional(),
-            }).optional(),
-          }),
-          z.object({
-            requests: z.array(z.object({
-              input: z.union([z.string(), z.array(z.unknown())]),
-              reasoning: z.object({
-                effort: z.enum(["low", "medium", "high"]).optional(),
-                summary: z.enum(["auto", "concise", "detailed"]).optional(),
-              }).optional(),
-            })),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/gpt-oss-20b${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_openai_gpt_oss_20b",
-          "workers_ai_post_run_cf_openai_gpt_oss_20b-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_openai_gpt_oss_20b",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_openai_whisper_large_v3_turbo: {
-      description: "Execute @cf/openai/whisper-large-v3-turbo model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        audio: z.union([
-          z.string(),
-          z.object({
-            body: z.object({}).optional(),
-            contentType: z.string().optional(),
-          }),
-        ]),
-        beam_size: z.number().int().optional().describe(
-          "The number of beams to use in beam search decoding. Higher values may improve...",
-        ),
-        compression_ratio_threshold: z.number().optional().describe(
-          "Threshold for filtering out segments with high compression ratio, which often...",
-        ),
-        condition_on_previous_text: z.boolean().optional().describe(
-          "Whether to condition on previous text during transcription. Setting to false ...",
-        ),
-        hallucination_silence_threshold: z.number().optional().describe(
-          "Optional threshold (in seconds) to skip silent periods that may cause halluci...",
-        ),
-        initial_prompt: z.string().optional().describe(
-          "A text prompt to help provide context to the model on the contents of the audio.",
-        ),
-        language: z.string().optional().describe(
-          "The language of the audio being transcribed or translated.",
-        ),
-        log_prob_threshold: z.number().optional().describe(
-          "Threshold for filtering out segments with low average log probability, indica...",
-        ),
-        no_speech_threshold: z.number().optional().describe(
-          "Threshold for detecting no-speech segments. Segments with no-speech probabili...",
-        ),
-        prefix: z.string().optional().describe(
-          "The prefix appended to the beginning of the output of the transcription and c...",
-        ),
-        task: z.string().optional().describe(
-          "Supported tasks are 'translate' or 'transcribe'.",
-        ),
-        vad_filter: z.boolean().optional().describe(
-          "Preprocess the audio with a voice activity detection model.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/whisper-large-v3-turbo${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_openai_whisper_large_v3_turbo",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_openai_whisper_large_v3_turbo {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_openchat_openchat_3_5_0106: {
-      description: "Execute @cf/openchat/openchat-3.5-0106 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/openchat/openchat-3.5-0106${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_openchat_openchat_3_5_0106",
-          "workers_ai_post_run_cf_openchat_openchat_3_5_0106-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_openchat_openchat_3_5_0106",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_pfnet_plamo_embedding_1b: {
-      description: "Execute @cf/pfnet/plamo-embedding-1b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        text: z.union([z.string(), z.array(z.string())]).describe(
-          "Input text to embed. Can be a single string or a list of strings.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/pfnet/plamo-embedding-1b${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_pfnet_plamo_embedding_1b",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_pfnet_plamo_embedding_1b {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2: {
-      description:
-        "Open Websocket connection with @cf/pipecat-ai/smart-turn-v2 model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/pipecat-ai/smart-turn-v2`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2",
-          "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3: {
-      description:
-        "Open Websocket connection with @cf/pipecat-ai/smart-turn-v3 model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/pipecat-ai/smart-turn-v3`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3",
-          "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat: {
-      description: "Execute @cf/qwen/qwen1.5-0.5b-chat model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-0.5b-chat${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat",
-          "workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat: {
-      description: "Execute @cf/qwen/qwen1.5-1.8b-chat model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-1.8b-chat${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat",
-          "workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq: {
-      description: "Execute @cf/qwen/qwen1.5-14b-chat-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-14b-chat-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq",
-          "workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq: {
-      description: "Execute @cf/qwen/qwen1.5-7b-chat-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-7b-chat-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq",
-          "workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct: {
-      description: "Execute @cf/qwen/qwen2.5-coder-32b-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.string(),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen2.5-coder-32b-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct",
-          "workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8: {
-      description: "Execute @cf/qwen/qwen3-30b-a3b-fp8 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(2000),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(2000),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            requests: z.array(z.union([
-              z.object({
-                frequency_penalty: z.number().min(-2).max(2).optional(),
-                lora: z.string().optional(),
-                max_tokens: z.number().int().optional().default(256),
-                presence_penalty: z.number().min(-2).max(2).optional(),
-                prompt: z.string().min(1),
-                raw: z.boolean().optional().default(false),
-                repetition_penalty: z.number().min(0).max(2).optional(),
-                response_format: z.object({
-                  json_schema: z.unknown().optional(),
-                  type: z.enum(["json_object", "json_schema"]).optional(),
-                }).optional(),
-                seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional().default(false),
-                temperature: z.number().min(0).max(5).optional().default(0.6),
-                top_k: z.number().int().min(1).max(50).optional(),
-                top_p: z.number().min(0.001).max(1).optional(),
-              }),
-              z.object({
-                frequency_penalty: z.number().min(-2).max(2).optional(),
-                functions: z.array(z.object({
-                  code: z.string(),
-                  name: z.string(),
-                })).optional(),
-                max_tokens: z.number().int().optional().default(256),
-                messages: z.array(z.object({
-                  content: z.union([z.unknown(), z.unknown()]),
-                  role: z.string(),
-                })),
-                presence_penalty: z.number().min(-2).max(2).optional(),
-                raw: z.boolean().optional().default(false),
-                repetition_penalty: z.number().min(0).max(2).optional(),
-                response_format: z.object({
-                  json_schema: z.unknown().optional(),
-                  type: z.enum(["json_object", "json_schema"]).optional(),
-                }).optional(),
-                seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional().default(false),
-                temperature: z.number().min(0).max(5).optional().default(0.6),
-                tools: z.array(z.union([
-                  z.object({
-                    description: z.unknown(),
-                    name: z.unknown(),
-                    parameters: z.unknown(),
-                  }),
-                  z.object({
-                    function: z.unknown(),
-                    type: z.unknown(),
-                  }),
-                ])).optional(),
-                top_k: z.number().int().min(1).max(50).optional(),
-                top_p: z.number().min(0.001).max(1).optional(),
-              }),
-            ])),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen3-30b-a3b-fp8${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8",
-          "workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b: {
-      description: "Execute @cf/qwen/qwen3-embedding-0.6b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        documents: z.union([z.string().min(1), z.array(z.string().min(1))])
-          .optional(),
-        instruction: z.string().optional().describe(
-          "Optional instruction for the task",
-        ),
-        queries: z.union([z.string().min(1), z.array(z.string().min(1))])
-          .optional(),
-        text: z.union([z.string().min(1), z.array(z.string().min(1))])
-          .optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen3-embedding-0.6b${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_qwen_qwq_32b: {
-      description: "Execute @cf/qwen/qwq-32b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.15),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(0).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  image_url: z.object({
-                    url: z.unknown().optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-                z.object({
-                  image_url: z.object({
-                    url: z.string().regex(new RegExp("^data:*")).optional(),
-                  }).optional(),
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                }),
-              ]).optional(),
-              role: z.string().optional(),
-              tool_call_id: z.string().optional(),
-            })),
-            presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.15),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0).max(2).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwq-32b${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_qwen_qwq_32b",
-          "workers_ai_post_run_cf_qwen_qwq_32b-current",
-          result ?? {},
-        );
-        context.logger.info("Executed workers_ai_post_run_cf_qwen_qwq_32b", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img: {
-      description: "Execute @cf/runwayml/stable-diffusion-v1-5-img2img model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        guidance: z.number().optional().describe(
-          "Controls how closely the generated image should adhere to the prompt; higher ...",
-        ),
-        height: z.number().int().min(256).max(2048).optional().describe(
-          "The height of the generated image in pixels",
-        ),
-        image: z.array(z.number()).optional().describe(
-          "For use with img2img tasks. An array of integers that represent the image dat...",
-        ),
-        image_b64: z.string().optional().describe(
-          "For use with img2img tasks. A base64-encoded string of the input image",
-        ),
-        mask: z.array(z.number()).optional().describe(
-          "An array representing An array of integers that represent mask image data for...",
-        ),
-        negative_prompt: z.string().optional().describe(
-          "Text describing elements to avoid in the generated image",
-        ),
-        num_steps: z.number().int().max(20).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take longer",
-        ),
-        prompt: z.string().min(1).describe(
-          "A text description of the image you want to generate",
-        ),
-        seed: z.number().int().optional().describe(
-          "Random seed for reproducibility of the image generation",
-        ),
-        strength: z.number().optional().describe(
-          "A value between 0 and 1 indicating how strongly to apply the transformation d...",
-        ),
-        width: z.number().int().min(256).max(2048).optional().describe(
-          "The width of the generated image in pixels",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/runwayml/stable-diffusion-v1-5-img2img${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting: {
-      description:
-        "Execute @cf/runwayml/stable-diffusion-v1-5-inpainting model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        guidance: z.number().optional().describe(
-          "Controls how closely the generated image should adhere to the prompt; higher ...",
-        ),
-        height: z.number().int().min(256).max(2048).optional().describe(
-          "The height of the generated image in pixels",
-        ),
-        image: z.array(z.number()).optional().describe(
-          "For use with img2img tasks. An array of integers that represent the image dat...",
-        ),
-        image_b64: z.string().optional().describe(
-          "For use with img2img tasks. A base64-encoded string of the input image",
-        ),
-        mask: z.array(z.number()).optional().describe(
-          "An array representing An array of integers that represent mask image data for...",
-        ),
-        negative_prompt: z.string().optional().describe(
-          "Text describing elements to avoid in the generated image",
-        ),
-        num_steps: z.number().int().max(20).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take longer",
-        ),
-        prompt: z.string().min(1).describe(
-          "A text description of the image you want to generate",
-        ),
-        seed: z.number().int().optional().describe(
-          "Random seed for reproducibility of the image generation",
-        ),
-        strength: z.number().optional().describe(
-          "A value between 0 and 1 indicating how strongly to apply the transformation d...",
-        ),
-        width: z.number().int().min(256).max(2048).optional().describe(
-          "The width of the generated image in pixels",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/runwayml/stable-diffusion-v1-5-inpainting${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0: {
-      description:
-        "Execute @cf/stabilityai/stable-diffusion-xl-base-1.0 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        guidance: z.number().optional().describe(
-          "Controls how closely the generated image should adhere to the prompt; higher ...",
-        ),
-        height: z.number().int().min(256).max(2048).optional().describe(
-          "The height of the generated image in pixels",
-        ),
-        image: z.array(z.number()).optional().describe(
-          "For use with img2img tasks. An array of integers that represent the image dat...",
-        ),
-        image_b64: z.string().optional().describe(
-          "For use with img2img tasks. A base64-encoded string of the input image",
-        ),
-        mask: z.array(z.number()).optional().describe(
-          "An array representing An array of integers that represent mask image data for...",
-        ),
-        negative_prompt: z.string().optional().describe(
-          "Text describing elements to avoid in the generated image",
-        ),
-        num_steps: z.number().int().max(20).optional().describe(
-          "The number of diffusion steps; higher values can improve quality but take longer",
-        ),
-        prompt: z.string().min(1).describe(
-          "A text description of the image you want to generate",
-        ),
-        seed: z.number().int().optional().describe(
-          "Random seed for reproducibility of the image generation",
-        ),
-        strength: z.number().optional().describe(
-          "A value between 0 and 1 indicating how strongly to apply the transformation d...",
-        ),
-        width: z.number().int().min(256).max(2048).optional().describe(
-          "The width of the generated image in pixels",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0${qs}`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0 {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_sven_test_pipe_http: {
-      description:
-        "Open Websocket connection with @cf/sven/test-pipe-http model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/sven/test-pipe-http`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_sven_test_pipe_http",
-          "workers_ai_post_websocket_run_cf_sven_test_pipe_http-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_sven_test_pipe_http",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_ai_post_websocket_run_cf_test_hello_world_cog: {
-      description:
-        "Open Websocket connection with @cf/test/hello-world-cog model.",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai/run/@cf/test/hello-world-cog`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_websocket_run_cf_test_hello_world_cog",
-          "workers_ai_post_websocket_run_cf_test_hello_world_cog-current",
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_ai_post_websocket_run_cf_test_hello_world_cog",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq: {
-      description: "Execute @cf/thebloke/discolm-german-7b-v1-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/thebloke/discolm-german-7b-v1-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq",
-          "workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_tiiuae_falcon_7b_instruct: {
-      description: "Execute @cf/tiiuae/falcon-7b-instruct model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/tiiuae/falcon-7b-instruct${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_tiiuae_falcon_7b_instruct",
-          "workers_ai_post_run_cf_tiiuae_falcon_7b_instruct-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_tiiuae_falcon_7b_instruct",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0: {
-      description: "Execute @cf/tinyllama/tinyllama-1.1b-chat-v1.0 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/tinyllama/tinyllama-1.1b-chat-v1.0${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0",
-          "workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_zai_org_glm_4_7_flash: {
-      description: "Execute @cf/zai-org/glm-4.7-flash model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            audio: z.object({
-              format: z.enum(["wav", "aac", "mp3", "flac", "opus", "pcm16"]),
-              voice: z.union([
-                z.string(),
-                z.object({
-                  id: z.string(),
-                }),
-              ]),
-            }).optional(),
-            chat_template_kwargs: z.object({
-              clear_thinking: z.boolean().optional().default(false),
-              enable_thinking: z.boolean().optional().default(true),
-            }).optional(),
-            frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
-            function_call: z.union([
-              z.enum(["none", "auto"]),
-              z.object({
-                name: z.string(),
-              }),
-            ]).optional(),
-            functions: z.array(z.object({
-              description: z.string().optional(),
-              name: z.string(),
-              parameters: z.object({}).optional(),
-              strict: z.boolean().nullable().optional(),
-            })).optional(),
-            logit_bias: z.object({}).nullable().optional(),
-            logprobs: z.boolean().nullable().optional(),
-            max_completion_tokens: z.number().int().nullable().optional(),
-            max_tokens: z.number().int().nullable().optional(),
-            metadata: z.object({}).nullable().optional(),
-            modalities: z.array(z.enum(["text", "audio"])).nullable()
-              .optional(),
-            model: z.string().optional(),
-            n: z.number().int().min(1).max(128).nullable().optional(),
-            parallel_tool_calls: z.boolean().optional().default(true),
-            prediction: z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string(),
-                  type: z.enum(["text"]),
-                })),
-              ]),
-              type: z.enum(["content"]),
-            }).optional(),
-            presence_penalty: z.number().min(-2).max(2).nullable().optional(),
-            prompt: z.string().min(1),
-            reasoning_effort: z.enum(["low", "medium", "high"]).nullable()
-              .optional(),
-            response_format: z.union([
-              z.object({
-                type: z.enum(["text"]),
-              }),
-              z.object({
-                type: z.enum(["json_object"]),
-              }),
-              z.object({
-                json_schema: z.object({
-                  description: z.string().optional(),
-                  name: z.string(),
-                  schema: z.object({}).optional(),
-                  strict: z.boolean().nullable().optional(),
-                }),
-                type: z.enum(["json_schema"]),
-              }),
-            ]).optional(),
-            seed: z.number().int().nullable().optional(),
-            service_tier: z.enum([
-              "auto",
-              "default",
-              "flex",
-              "scale",
-              "priority",
-            ]).nullable().optional(),
-            stop: z.union([z.string(), z.array(z.string())]).optional(),
-            store: z.boolean().nullable().optional(),
-            stream: z.boolean().nullable().optional(),
-            stream_options: z.object({
-              include_obfuscation: z.boolean().optional(),
-              include_usage: z.boolean().optional(),
-            }).optional(),
-            temperature: z.number().min(0).max(2).nullable().optional(),
-            tool_choice: z.union([
-              z.enum(["none", "auto", "required"]),
-              z.object({
-                function: z.object({
-                  name: z.string(),
-                }),
-                type: z.enum(["function"]),
-              }),
-              z.object({
-                custom: z.object({
-                  name: z.string(),
-                }),
-                type: z.enum(["custom"]),
-              }),
-              z.object({
-                allowed_tools: z.object({
-                  mode: z.enum(["auto", "required"]),
-                  tools: z.array(z.object({})),
-                }),
-                type: z.enum(["allowed_tools"]),
-              }),
-            ]).optional(),
-            tools: z.array(z.union([
-              z.object({
-                function: z.object({
-                  description: z.string().optional(),
-                  name: z.string(),
-                  parameters: z.object({}).optional(),
-                  strict: z.boolean().nullable().optional(),
-                }),
-                type: z.enum(["function"]),
-              }),
-              z.object({
-                custom: z.object({
-                  description: z.string().optional(),
-                  format: z.union([
-                    z.object({
-                      type: z.unknown(),
-                    }),
-                    z.object({
-                      grammar: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ]).optional(),
-                  name: z.string(),
-                }),
-                type: z.enum(["custom"]),
-              }),
-            ])).optional(),
-            top_logprobs: z.number().int().min(0).max(20).nullable().optional(),
-            top_p: z.number().min(0).max(1).nullable().optional(),
-            user: z.string().optional(),
-            web_search_options: z.object({
-              search_context_size: z.enum(["low", "medium", "high"]).optional()
-                .default("medium"),
-              user_location: z.object({
-                approximate: z.object({
-                  city: z.string().optional(),
-                  country: z.string().optional(),
-                  region: z.string().optional(),
-                  timezone: z.string().optional(),
-                }),
-                type: z.enum(["approximate"]),
-              }).optional(),
-            }).optional(),
-          }),
-          z.object({
-            audio: z.object({
-              format: z.enum(["wav", "aac", "mp3", "flac", "opus", "pcm16"]),
-              voice: z.union([
-                z.string(),
-                z.object({
-                  id: z.string(),
-                }),
-              ]),
-            }).optional(),
-            chat_template_kwargs: z.object({
-              clear_thinking: z.boolean().optional().default(false),
-              enable_thinking: z.boolean().optional().default(true),
-            }).optional(),
-            frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
-            function_call: z.union([
-              z.enum(["none", "auto"]),
-              z.object({
-                name: z.string(),
-              }),
-            ]).optional(),
-            functions: z.array(z.object({
-              description: z.string().optional(),
-              name: z.string(),
-              parameters: z.object({}).optional(),
-              strict: z.boolean().nullable().optional(),
-            })).optional(),
-            logit_bias: z.object({}).nullable().optional(),
-            logprobs: z.boolean().nullable().optional(),
-            max_completion_tokens: z.number().int().nullable().optional(),
-            max_tokens: z.number().int().nullable().optional(),
-            messages: z.array(z.union([
-              z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    text: z.unknown(),
-                    type: z.unknown(),
-                  })),
-                ]),
-                name: z.string().optional(),
-                role: z.enum(["developer"]),
-              }),
-              z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    text: z.unknown(),
-                    type: z.unknown(),
-                  })),
-                ]),
-                name: z.string().optional(),
-                role: z.enum(["system"]),
-              }),
-              z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    file: z.unknown().optional(),
-                    image_url: z.unknown().optional(),
-                    input_audio: z.unknown().optional(),
-                    text: z.unknown().optional(),
-                    type: z.unknown(),
-                    video_url: z.unknown().optional(),
-                  })),
-                ]),
-                name: z.string().optional(),
-                role: z.enum(["user"]),
-              }),
-              z.object({
-                audio: z.object({
-                  id: z.string(),
-                }).optional(),
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    refusal: z.unknown().optional(),
-                    text: z.unknown().optional(),
-                    type: z.unknown(),
-                  })),
-                ]).optional(),
-                function_call: z.object({
-                  arguments: z.string(),
-                  name: z.string(),
-                }).optional(),
-                name: z.string().optional(),
-                refusal: z.string().nullable().optional(),
-                role: z.enum(["assistant"]),
-                tool_calls: z.array(z.union([
-                  z.object({
-                    function: z.unknown(),
-                    id: z.unknown(),
-                    type: z.unknown(),
-                  }),
-                  z.object({
-                    custom: z.unknown(),
-                    id: z.unknown(),
-                    type: z.unknown(),
-                  }),
-                ])).optional(),
-              }),
-              z.object({
-                content: z.union([
-                  z.string(),
-                  z.array(z.object({
-                    text: z.unknown(),
-                    type: z.unknown(),
-                  })),
-                ]),
-                role: z.enum(["tool"]),
-                tool_call_id: z.string(),
-              }),
-              z.object({
-                content: z.string(),
-                name: z.string(),
-                role: z.enum(["function"]),
-              }),
-            ])),
-            metadata: z.object({}).nullable().optional(),
-            modalities: z.array(z.enum(["text", "audio"])).nullable()
-              .optional(),
-            model: z.string().optional(),
-            n: z.number().int().min(1).max(128).nullable().optional(),
-            parallel_tool_calls: z.boolean().optional().default(true),
-            prediction: z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string(),
-                  type: z.enum(["text"]),
-                })),
-              ]),
-              type: z.enum(["content"]),
-            }).optional(),
-            presence_penalty: z.number().min(-2).max(2).nullable().optional(),
-            reasoning_effort: z.enum(["low", "medium", "high"]).nullable()
-              .optional(),
-            response_format: z.union([
-              z.object({
-                type: z.enum(["text"]),
-              }),
-              z.object({
-                type: z.enum(["json_object"]),
-              }),
-              z.object({
-                json_schema: z.object({
-                  description: z.string().optional(),
-                  name: z.string(),
-                  schema: z.object({}).optional(),
-                  strict: z.boolean().nullable().optional(),
-                }),
-                type: z.enum(["json_schema"]),
-              }),
-            ]).optional(),
-            seed: z.number().int().nullable().optional(),
-            service_tier: z.enum([
-              "auto",
-              "default",
-              "flex",
-              "scale",
-              "priority",
-            ]).nullable().optional(),
-            stop: z.union([z.string(), z.array(z.string())]).optional(),
-            store: z.boolean().nullable().optional(),
-            stream: z.boolean().nullable().optional(),
-            stream_options: z.object({
-              include_obfuscation: z.boolean().optional(),
-              include_usage: z.boolean().optional(),
-            }).optional(),
-            temperature: z.number().min(0).max(2).nullable().optional(),
-            tool_choice: z.union([
-              z.enum(["none", "auto", "required"]),
-              z.object({
-                function: z.object({
-                  name: z.string(),
-                }),
-                type: z.enum(["function"]),
-              }),
-              z.object({
-                custom: z.object({
-                  name: z.string(),
-                }),
-                type: z.enum(["custom"]),
-              }),
-              z.object({
-                allowed_tools: z.object({
-                  mode: z.enum(["auto", "required"]),
-                  tools: z.array(z.object({})),
-                }),
-                type: z.enum(["allowed_tools"]),
-              }),
-            ]).optional(),
-            tools: z.array(z.union([
-              z.object({
-                function: z.object({
-                  description: z.string().optional(),
-                  name: z.string(),
-                  parameters: z.object({}).optional(),
-                  strict: z.boolean().nullable().optional(),
-                }),
-                type: z.enum(["function"]),
-              }),
-              z.object({
-                custom: z.object({
-                  description: z.string().optional(),
-                  format: z.union([
-                    z.object({
-                      type: z.unknown(),
-                    }),
-                    z.object({
-                      grammar: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ]).optional(),
-                  name: z.string(),
-                }),
-                type: z.enum(["custom"]),
-              }),
-            ])).optional(),
-            top_logprobs: z.number().int().min(0).max(20).nullable().optional(),
-            top_p: z.number().min(0).max(1).nullable().optional(),
-            user: z.string().optional(),
-            web_search_options: z.object({
-              search_context_size: z.enum(["low", "medium", "high"]).optional()
-                .default("medium"),
-              user_location: z.object({
-                approximate: z.object({
-                  city: z.string().optional(),
-                  country: z.string().optional(),
-                  region: z.string().optional(),
-                  timezone: z.string().optional(),
-                }),
-                type: z.enum(["approximate"]),
-              }).optional(),
-            }).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/zai-org/glm-4.7-flash${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_zai_org_glm_4_7_flash",
-          "workers_ai_post_run_cf_zai_org_glm_4_7_flash-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_zai_org_glm_4_7_flash",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_zai_org_glm_5_2: {
-      description: "Execute @cf/zai-org/glm-5.2 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/zai-org/glm-5.2${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_zai_org_glm_5_2",
-          "workers_ai_post_run_cf_zai_org_glm_5_2-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_zai_org_glm_5_2",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_google_gemma_7b_it: {
-      description: "Execute @hf/google/gemma-7b-it model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/google/gemma-7b-it${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_google_gemma_7b_it",
-          "workers_ai_post_run_hf_google_gemma_7b_it-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_google_gemma_7b_it",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2: {
-      description: "Execute @hf/mistral/mistral-7b-instruct-v0.2 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/mistral/mistral-7b-instruct-v0.2${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2",
-          "workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta: {
-      description: "Execute @hf/nexusflow/starling-lm-7b-beta model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/nexusflow/starling-lm-7b-beta${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta",
-          "workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b: {
-      description: "Execute @hf/nousresearch/hermes-2-pro-mistral-7b model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/nousresearch/hermes-2-pro-mistral-7b${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b",
-          "workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq: {
-      description: "Execute @hf/thebloke/deepseek-coder-6.7b-base-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/deepseek-coder-6.7b-base-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq",
-          "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq: {
-      description:
-        "Execute @hf/thebloke/deepseek-coder-6.7b-instruct-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/deepseek-coder-6.7b-instruct-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq",
-          "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq: {
-      description: "Execute @hf/thebloke/llama-2-13b-chat-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/llama-2-13b-chat-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq",
-          "workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq: {
-      description: "Execute @hf/thebloke/mistral-7b-instruct-v0.1-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/mistral-7b-instruct-v0.1-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq",
-          "workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq: {
-      description: "Execute @hf/thebloke/neural-chat-7b-v3-1-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/neural-chat-7b-v3-1-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq",
-          "workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq: {
-      description: "Execute @hf/thebloke/openhermes-2.5-mistral-7b-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/openhermes-2.5-mistral-7b-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq",
-          "workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq: {
-      description: "Execute @hf/thebloke/zephyr-7b-beta-awq model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-        body: z.union([
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            lora: z.string().optional(),
-            max_tokens: z.number().int().optional().default(256),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            prompt: z.string().min(1),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-          z.object({
-            frequency_penalty: z.number().min(-2).max(2).optional(),
-            functions: z.array(z.object({
-              code: z.string(),
-              name: z.string(),
-            })).optional(),
-            max_tokens: z.number().int().optional().default(256),
-            messages: z.array(z.object({
-              content: z.union([
-                z.string(),
-                z.array(z.object({
-                  text: z.string().optional(),
-                  type: z.string().optional(),
-                })),
-              ]),
-              role: z.string(),
-            })),
-            presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional().default(false),
-            repetition_penalty: z.number().min(0).max(2).optional(),
-            response_format: z.object({
-              json_schema: z.unknown().optional(),
-              type: z.enum(["json_object", "json_schema"]).optional(),
-            }).optional(),
-            seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional().default(false),
-            temperature: z.number().min(0).max(5).optional().default(0.6),
-            tools: z.array(z.union([
-              z.object({
-                description: z.string(),
-                name: z.string(),
-                parameters: z.object({
-                  properties: z.record(
-                    z.string(),
-                    z.object({
-                      description: z.unknown(),
-                      type: z.unknown(),
-                    }),
-                  ),
-                  required: z.array(z.string()).optional(),
-                  type: z.string(),
-                }),
-              }),
-              z.object({
-                function: z.object({
-                  description: z.string(),
-                  name: z.string(),
-                  parameters: z.object({
-                    properties: z.record(z.string(), z.unknown()),
-                    required: z.array(z.unknown()).optional(),
-                    type: z.string(),
-                  }),
-                }),
-                type: z.string(),
-              }),
-            ])).optional(),
-            top_k: z.number().int().min(1).max(50).optional(),
-            top_p: z.number().min(0.001).max(1).optional(),
-          }),
-        ]),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args.body;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/zephyr-7b-beta-awq${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq",
-          "workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq-current",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     workers_ai_post_run_model: {
-      description: "Execute AI model",
+      description: "Run a Workers AI model",
       arguments: z.object({
-        model_name: z.string(),
+        model_name: z.string().describe(
+          "Workers AI model identifier, including its namespace and model name.",
+        ),
         body: z.union([
           z.object({
             text: z.string().min(1),
@@ -22847,7 +10090,7 @@ export const model = {
               raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().min(0).max(2).optional(),
               response_format: z.object({
-                json_schema: z.unknown().optional(),
+                json_schema: z.object({}).optional(),
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
@@ -22877,7 +10120,7 @@ export const model = {
               raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().min(0).max(2).optional(),
               response_format: z.object({
-                json_schema: z.unknown().optional(),
+                json_schema: z.object({}).optional(),
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
@@ -23072,7 +10315,7 @@ export const model = {
       },
     },
     get_to_markdown_supported: {
-      description: "Get all converted formats supported",
+      description: "List supported Markdown conversion formats",
       arguments: z.object({}),
       execute: async (
         args: Record<string, unknown>,
@@ -23125,6 +10368,66 @@ export const model = {
 
         context.logger.info("Found {count} get_to_markdown_supported", {
           count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_workers_ai_ai_gateway_web_search: {
+      description: "Search the web through AI Gateway",
+      arguments: z.object({
+        byokAlias: z.string().regex(new RegExp("^[A-Za-z0-9_-]{1,64}$"))
+          .optional(),
+        limit: z.number().int().min(1).max(10).optional(),
+        options: z.object({
+          gateway: z.object({
+            id: z.string().min(1),
+          }),
+        }),
+        provider: z.string().min(1).max(1024).optional(),
+        query: z.string().min(1),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/ai/websearch`,
+          body,
+        );
+
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
+        );
+        const handle = await context.writeResource(
+          "workers_ai_ai_gateway_web_search",
+          id,
+          result,
+        );
+        context.logger.info("Created workers_ai_ai_gateway_web_search {id}", {
+          id,
         });
         return { dataHandles: [handle] };
       },

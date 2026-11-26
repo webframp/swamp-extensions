@@ -33,10 +33,11 @@ swamp model create @webframp/cloudflare/durable-objects cf-durable-objects \
 
 ## Methods
 
-| Method            | Description     |
-| ----------------- | --------------- |
-| `list_namespaces` | List Namespaces |
-| `list_objects`    | List Objects    |
+| Method                            | Description                                |
+| --------------------------------- | ------------------------------------------ |
+| `list_namespaces`                 | List Durable Object Namespaces             |
+| `list_objects`                    | List Objects in a Durable Object namespace |
+| `durable_objects_namespace_query` | Query a Durable Object                     |
 
 ## Development
 

@@ -29,14 +29,18 @@ const GlobalArgsSchema = z.object({
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
-const GetAccountsAccountIdLogpushDatasetsDatasetIdFieldsSchema = z.object({})
-  .passthrough();
+const GetAccountsAccountIdLogpushDatasetsDatasetIdFieldsSchema = z.record(
+  z.string(),
+  z.string(),
+);
 
 const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional(),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -48,7 +52,7 @@ const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsSchema = z.object({
   items: z.array(GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema),
@@ -65,8 +69,10 @@ const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsSchema = z.object({
 const GetAccountsAccountIdLogpushJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional(),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -78,7 +84,7 @@ const GetAccountsAccountIdLogpushJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const GetAccountsAccountIdLogpushJobsSchema = z.object({
   items: z.array(GetAccountsAccountIdLogpushJobsItemSchema),
@@ -95,8 +101,10 @@ const GetAccountsAccountIdLogpushJobsSchema = z.object({
 const CreatePostAccountsAccountIdLogpushJobsSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional().meta({ sensitive: true }),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -108,13 +116,15 @@ const CreatePostAccountsAccountIdLogpushJobsSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const GetAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional().meta({ sensitive: true }),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -126,13 +136,15 @@ const GetAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const PutAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional().meta({ sensitive: true }),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -144,7 +156,7 @@ const PutAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const CreatePostAccountsAccountIdLogpushOwnershipSchema = z.object({
   filename: z.string().optional(),
@@ -155,6 +167,120 @@ const CreatePostAccountsAccountIdLogpushOwnershipSchema = z.object({
 const CreatePostAccountsAccountIdLogpushOwnershipValidateSchema = z.object({
   valid: z.boolean().optional(),
 }).passthrough().nullable();
+
+const GetAccountsAccountIdLogpushTransformersItemSchema = z.object({
+  associated_jobs: z.array(z.unknown()).optional().describe(
+    "Logpush jobs that reference this transformer.",
+  ),
+  created_at: z.string().optional().describe(
+    "When the transformer was created (RFC 3339).",
+  ),
+  dataset: z.unknown().optional(),
+  description: z.unknown().optional(),
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  updated_at: z.string().optional().describe(
+    "When the transformer was last modified (RFC 3339).",
+  ),
+}).passthrough();
+
+const GetAccountsAccountIdLogpushTransformersSchema = z.object({
+  items: z.array(GetAccountsAccountIdLogpushTransformersItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CreatePostAccountsAccountIdLogpushTransformersSchema = z.object({
+  associated_jobs: z.array(z.unknown()).optional().describe(
+    "Logpush jobs that reference this transformer.",
+  ),
+  created_at: z.string().optional().describe(
+    "When the transformer was created (RFC 3339).",
+  ),
+  dataset: z.unknown().optional(),
+  description: z.unknown().optional(),
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  updated_at: z.string().optional().describe(
+    "When the transformer was last modified (RFC 3339).",
+  ),
+}).passthrough();
+
+const CreatePostAccountsAccountIdLogpushTransformersPreviewSchema = z.record(
+  z.string(),
+  z.unknown(),
+);
+
+const GetAccountsAccountIdLogpushTransformersTransformerIdSchema = z.object({
+  associated_jobs: z.array(z.unknown()).optional().describe(
+    "Logpush jobs that reference this transformer.",
+  ),
+  created_at: z.string().optional().describe(
+    "When the transformer was created (RFC 3339).",
+  ),
+  dataset: z.unknown().optional(),
+  description: z.unknown().optional(),
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  updated_at: z.string().optional().describe(
+    "When the transformer was last modified (RFC 3339).",
+  ),
+}).passthrough();
+
+const PutAccountsAccountIdLogpushTransformersTransformerIdSchema = z.object({
+  associated_jobs: z.array(z.unknown()).optional().describe(
+    "Logpush jobs that reference this transformer.",
+  ),
+  created_at: z.string().optional().describe(
+    "When the transformer was created (RFC 3339).",
+  ),
+  dataset: z.unknown().optional(),
+  description: z.unknown().optional(),
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  updated_at: z.string().optional().describe(
+    "When the transformer was last modified (RFC 3339).",
+  ),
+}).passthrough();
+
+const GetAccountsAccountIdLogpushTransformersTransformerIdContentSchema = z
+  .object({
+    content: z.string().optional().describe("The SQL query content."),
+  }).passthrough();
+
+const GetAccountsAccountIdLogpushTransformersTransformerIdVersionsItemSchema = z
+  .object({
+    created_at: z.string().optional().describe(
+      "When this version was created (RFC 3339).",
+    ),
+    id: z.number().int().min(1).optional().describe(
+      "Unique identifier for this version.",
+    ),
+    version: z.number().int().min(1).optional().describe(
+      "Sequential version number.",
+    ),
+  }).passthrough();
+
+const GetAccountsAccountIdLogpushTransformersTransformerIdVersionsSchema = z
+  .object({
+    items: z.array(
+      GetAccountsAccountIdLogpushTransformersTransformerIdVersionsItemSchema,
+    ),
+    truncated: z.boolean(),
+    fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
+  });
 
 const DeleteAccountsAccountIdLogpushValidateDestinationSchema = z.object({
   message: z.string().optional(),
@@ -170,14 +296,18 @@ const CreatePostAccountsAccountIdLogpushValidateOriginSchema = z.object({
   valid: z.boolean().optional(),
 }).passthrough().nullable();
 
-const GetZonesZoneIdLogpushDatasetsDatasetIdFieldsSchema = z.object({})
-  .passthrough();
+const GetZonesZoneIdLogpushDatasetsDatasetIdFieldsSchema = z.record(
+  z.string(),
+  z.string(),
+);
 
 const GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional(),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -189,7 +319,7 @@ const GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const GetZonesZoneIdLogpushDatasetsDatasetIdJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema),
@@ -209,7 +339,7 @@ const GetZonesZoneIdLogpushEdgeJobsItemSchema = z.object({
   filter: z.unknown().optional(),
   sample: z.unknown().optional(),
   session_id: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const GetZonesZoneIdLogpushEdgeJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushEdgeJobsItemSchema),
@@ -229,13 +359,15 @@ const CreatePostZonesZoneIdLogpushEdgeJobsSchema = z.object({
   filter: z.unknown().optional(),
   sample: z.unknown().optional(),
   session_id: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const GetZonesZoneIdLogpushJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional(),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -247,7 +379,7 @@ const GetZonesZoneIdLogpushJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const GetZonesZoneIdLogpushJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushJobsItemSchema),
@@ -264,8 +396,10 @@ const GetZonesZoneIdLogpushJobsSchema = z.object({
 const CreatePostZonesZoneIdLogpushJobsSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional().meta({ sensitive: true }),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -277,13 +411,15 @@ const CreatePostZonesZoneIdLogpushJobsSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const GetZonesZoneIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional().meta({ sensitive: true }),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -295,13 +431,15 @@ const GetZonesZoneIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const PutZonesZoneIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
   destination_conf: z.unknown().optional().meta({ sensitive: true }),
+  destination_name: z.unknown().optional(),
   enabled: z.unknown().optional(),
   error_message: z.unknown().optional(),
+  filter_attack_traffic: z.unknown().optional(),
   frequency: z.unknown().optional(),
   id: z.unknown().optional(),
   kind: z.unknown().optional(),
@@ -313,7 +451,7 @@ const PutZonesZoneIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).passthrough().nullable();
+}).passthrough();
 
 const CreatePostZonesZoneIdLogpushOwnershipSchema = z.object({
   filename: z.string().optional(),
@@ -346,7 +484,7 @@ const CreatePostZonesZoneIdLogpushValidateOriginSchema = z.object({
 /** Cloudflare Logpush — log jobs, destinations, field configurations */
 export const model = {
   type: "@webframp/cloudflare/logpush",
-  version: "2026.11.03.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -417,6 +555,12 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -467,6 +611,49 @@ export const model = {
       schema: CreatePostAccountsAccountIdLogpushOwnershipValidateSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
+    },
+    "get_accounts_account_id_logpush_transformers": {
+      description: "List transformers",
+      schema: GetAccountsAccountIdLogpushTransformersSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "post_accounts_account_id_logpush_transformers": {
+      description: "Create transformer",
+      schema: CreatePostAccountsAccountIdLogpushTransformersSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "post_accounts_account_id_logpush_transformers_preview": {
+      description: "Preview transformer",
+      schema: CreatePostAccountsAccountIdLogpushTransformersPreviewSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "accounts_account_id_logpush_transformers_transformer_id": {
+      description: "Get transformer",
+      schema: GetAccountsAccountIdLogpushTransformersTransformerIdSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "put_accounts_account_id_logpush_transformers_transformer_id": {
+      description: "Update transformer",
+      schema: PutAccountsAccountIdLogpushTransformersTransformerIdSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "accounts_account_id_logpush_transformers_transformer_id_content": {
+      description: "Get transformer content",
+      schema: GetAccountsAccountIdLogpushTransformersTransformerIdContentSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "get_accounts_account_id_logpush_transformers_transformer_id_versions": {
+      description: "List transformer versions",
+      schema:
+        GetAccountsAccountIdLogpushTransformersTransformerIdVersionsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
     },
     "delete_accounts_account_id_logpush_validate_destination": {
       description: "Validate destination",
@@ -744,6 +931,7 @@ export const model = {
         ).meta({ sensitive: true }),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
+        filter_attack_traffic: z.unknown().optional(),
         frequency: z.unknown().optional(),
         kind: z.unknown().optional(),
         logpull_options: z.unknown().optional(),
@@ -853,6 +1041,7 @@ export const model = {
         ).meta({ sensitive: true }),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
+        filter_attack_traffic: z.unknown().optional(),
         frequency: z.unknown().optional(),
         kind: z.unknown().optional(),
         logpull_options: z.unknown().optional(),
@@ -1047,6 +1236,398 @@ export const model = {
         context.logger.info(
           "Created post_accounts_account_id_logpush_ownership_validate {id}",
           { id },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    get_accounts_account_id_logpush_transformers: {
+      description: "List transformers",
+      arguments: z.object({}),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/logpush/transformers`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "get_accounts_account_id_logpush_transformers",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info(
+          "Found {count} get_accounts_account_id_logpush_transformers",
+          { count: results.length },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    create_post_accounts_account_id_logpush_transformers: {
+      description: "Create transformer",
+      arguments: z.object({
+        code: z.unknown(),
+        description: z.unknown().optional(),
+        name: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/logpush/transformers`,
+          body,
+        );
+
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
+        );
+        const handle = await context.writeResource(
+          "post_accounts_account_id_logpush_transformers",
+          id,
+          result,
+        );
+        context.logger.info(
+          "Created post_accounts_account_id_logpush_transformers {id}",
+          { id },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    create_post_accounts_account_id_logpush_transformers_preview: {
+      description: "Preview transformer",
+      arguments: z.object({
+        input: z.record(z.string(), z.unknown()).describe(
+          "A single log record to transform (JSON object).",
+        ),
+        sql: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/logpush/transformers/preview`,
+          body,
+        );
+
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const id = sanitizeInstanceName(
+          await shortHash(JSON.stringify(requestKey)),
+        );
+        const handle = await context.writeResource(
+          "post_accounts_account_id_logpush_transformers_preview",
+          id,
+          result,
+        );
+        context.logger.info(
+          "Created post_accounts_account_id_logpush_transformers_preview {id}",
+          { id },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    get_accounts_account_id_logpush_transformers_transformer_id: {
+      description: "Get transformer",
+      arguments: z.object({
+        transformer_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/logpush/transformers/${args.transformer_id}`,
+        );
+
+        const handle = await context.writeResource(
+          "accounts_account_id_logpush_transformers_transformer_id",
+          sanitizeInstanceName(String(args.transformer_id)),
+          result,
+        );
+        context.logger.info(
+          "Fetched accounts_account_id_logpush_transformers_transformer_id",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    put_accounts_account_id_logpush_transformers_transformer_id: {
+      description: "Update transformer",
+      arguments: z.object({
+        transformer_id: z.string(),
+        code: z.unknown().optional(),
+        description: z.unknown().optional(),
+        name: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["transformer_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/logpush/transformers/${args.transformer_id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "put_accounts_account_id_logpush_transformers_transformer_id",
+          sanitizeInstanceName(String(args.transformer_id)),
+          result,
+        );
+        context.logger.info(
+          "Updated put_accounts_account_id_logpush_transformers_transformer_id",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_accounts_account_id_logpush_transformers_transformer_id: {
+      description: "Delete transformer",
+      arguments: z.object({
+        transformer_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/logpush/transformers/${args.transformer_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", {
+          id: args.transformer_id,
+        });
+        return { dataHandles: [] };
+      },
+    },
+    get_accounts_account_id_logpush_transformers_transformer_id_content: {
+      description: "Get transformer content",
+      arguments: z.object({
+        transformer_id: z.string(),
+        version_id: z.number().optional().describe(
+          "Specific version ID to retrieve. When omitted, the latest version is returned.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/logpush/transformers/${args.transformer_id}/content`,
+        );
+
+        const handle = await context.writeResource(
+          "accounts_account_id_logpush_transformers_transformer_id_content",
+          sanitizeInstanceName(String(args.transformer_id)),
+          result,
+        );
+        context.logger.info(
+          "Fetched accounts_account_id_logpush_transformers_transformer_id_content",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    get_accounts_account_id_logpush_transformers_transformer_id_versions: {
+      description: "List transformer versions",
+      arguments: z.object({
+        transformer_id: z.string(),
+        limit: z.number().optional().describe(
+          "Maximum number of versions to return.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["transformer_id", "page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/logpush/transformers/${args.transformer_id}/versions`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "get_accounts_account_id_logpush_transformers_transformer_id_versions",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info(
+          "Found {count} get_accounts_account_id_logpush_transformers_transformer_id_versions",
+          { count: results.length },
         );
         return { dataHandles: [handle] };
       },
@@ -1511,6 +2092,7 @@ export const model = {
         ).meta({ sensitive: true }),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
+        filter_attack_traffic: z.unknown().optional(),
         frequency: z.unknown().optional(),
         kind: z.unknown().optional(),
         logpull_options: z.unknown().optional(),
@@ -1613,6 +2195,7 @@ export const model = {
         ).meta({ sensitive: true }),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
+        filter_attack_traffic: z.unknown().optional(),
         frequency: z.unknown().optional(),
         kind: z.unknown().optional(),
         logpull_options: z.unknown().optional(),

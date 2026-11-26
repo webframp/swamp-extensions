@@ -40,6 +40,11 @@ Deno.test("d1 model: has expected methods", () => {
   assertExists(model.methods.d1_raw_database_query);
   assertExists(model.methods.get_bookmark);
   assertExists(model.methods.d1_time_travel_restore);
+  assertExists(model.methods.list_insights_databases);
+  assertExists(model.methods.list_insights_queries);
+  assertExists(model.methods.list_insights_recommendations);
+  assertExists(model.methods.get_insights_settings);
+  assertExists(model.methods.update_insights_settings);
 });
 
 Deno.test("d1 model: has expected resources", () => {
@@ -53,6 +58,10 @@ Deno.test("d1 model: has expected resources", () => {
   assertExists(model.resources["d1_raw_database_query"]);
   assertExists(model.resources["bookmark"]);
   assertExists(model.resources["d1_time_travel_restore"]);
+  assertExists(model.resources["insights_databases"]);
+  assertExists(model.resources["insights_queries"]);
+  assertExists(model.resources["list_insights_recommendations"]);
+  assertExists(model.resources["insights_settings"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -120,8 +129,11 @@ Deno.test({
   fn: async () => {
     const mockData = [{
       "created_at": null,
+      "file_size": null,
       "jurisdiction": null,
       "name": null,
+      "num_tables": null,
+      "recommendation_count": 2,
       "uuid": null,
       "version": null,
     }];
@@ -353,6 +365,65 @@ Deno.test({
         }
       >).delete_database.execute({ "database_id": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "d1 model: create_d1_export_database creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "at_bookmark": "test-value",
+      "error": "test-value",
+      "messages": ["test-value"],
+      "result": { "filename": "test-value", "signed_url": "test-value" },
+      "status": "complete",
+      "success": true,
+      "type": "export",
+      "id": "new-123",
+    };
+    const { url, server } = startMockCfServer({
+      "/d1/database/test-id-123/export": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-d1", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_d1_export_database.execute({
+        "at_bookmark": "test-value",
+        "error": "test-value",
+        "messages": ["test-value"],
+        "result": { "filename": "test-value", "signed_url": "test-value" },
+        "status": "complete",
+        "success": true,
+        "type": "export",
+        "database_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();

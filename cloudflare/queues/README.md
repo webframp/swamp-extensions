@@ -33,27 +33,28 @@ swamp model create @webframp/cloudflare/queues cf-queues \
 
 ## Methods
 
-| Method                               | Description                        |
-| ------------------------------------ | ---------------------------------- |
-| `list`                               | List Queues                        |
-| `create`                             | Create Queue                       |
-| `get`                                | Get Queue                          |
-| `update`                             | Update Queue                       |
-| `update_partial`                     | Update Queue                       |
-| `delete`                             | Delete Queue                       |
-| `list_consumers`                     | List Queue Consumers               |
-| `create_consumer`                    | Create a Queue Consumer            |
-| `get_consumer`                       | Get Queue Consumer                 |
-| `update_consumer`                    | Update Queue Consumer              |
-| `delete_consumer`                    | Delete Queue Consumer              |
-| `create_queues_push_message`         | Push Message                       |
-| `create_queues_ack_messages`         | Acknowledge + Retry Queue Messages |
-| `create_queues_push_messages`        | Push Message Batch                 |
-| `create_queues_preview_messages`     | Preview Queue Messages             |
-| `create_queues_ack_preview_messages` | Delete Previewed Queue Messages    |
-| `create_queues_pull_messages`        | Pull Queue Messages                |
-| `get_metrics`                        | Get Queue Metrics                  |
-| `create_queues_purge`                | Purge Queue                        |
+| Method                          | Description                        |
+| ------------------------------- | ---------------------------------- |
+| `list`                          | List Queues                        |
+| `create`                        | Create Queue                       |
+| `get`                           | Get Queue                          |
+| `update`                        | Update Queue                       |
+| `update_partial`                | Update Queue                       |
+| `delete`                        | Delete Queue                       |
+| `list_consumers`                | List Queue Consumers               |
+| `create_consumer`               | Create a Queue Consumer            |
+| `get_consumer`                  | Get Queue Consumer                 |
+| `update_consumer`               | Update Queue Consumer              |
+| `delete_consumer`               | Delete Queue Consumer              |
+| `create_queues_push_message`    | Push Message                       |
+| `create_queues_ack_messages`    | Acknowledge + Retry Queue Messages |
+| `create_queues_push_messages`   | Push Message Batch                 |
+| `create_queues_extend_messages` | Extend Message Leases              |
+| `create_queues_peek_messages`   | Peek Queue Messages                |
+| `create_queues_pull_messages`   | Pull Queue Messages                |
+| `create_queues_purge_messages`  | Purge Peeked Queue Messages        |
+| `get_metrics`                   | Get Queue Metrics                  |
+| `create_queues_purge`           | Purge Queue                        |
 
 ## Development
 

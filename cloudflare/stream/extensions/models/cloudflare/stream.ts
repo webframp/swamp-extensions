@@ -37,6 +37,7 @@ const VideosItemSchema = z.object({
   created: z.unknown().optional(),
   creator: z.unknown().optional(),
   duration: z.unknown().optional(),
+  encodingMode: z.unknown().optional(),
   input: z.unknown().optional(),
   liveInput: z.unknown().optional(),
   maxDurationSeconds: z.unknown().optional(),
@@ -47,6 +48,7 @@ const VideosItemSchema = z.object({
   modified: z.unknown().optional(),
   playback: z.unknown().optional(),
   preview: z.unknown().optional(),
+  previewStatus: z.unknown().optional(),
   publicDetails: z.object({
     channel_link: z.string().nullable().optional(),
     logo: z.string().nullable().optional(),
@@ -91,6 +93,7 @@ const CreateStreamVideoClippingClipVideosGivenAStartAndEndTimeSchema = z.object(
     created: z.unknown().optional(),
     creator: z.unknown().optional(),
     duration: z.unknown().optional(),
+    encodingMode: z.unknown().optional(),
     input: z.unknown().optional(),
     liveInput: z.unknown().optional(),
     maxDurationSeconds: z.unknown().optional(),
@@ -101,6 +104,7 @@ const CreateStreamVideoClippingClipVideosGivenAStartAndEndTimeSchema = z.object(
     modified: z.unknown().optional(),
     playback: z.unknown().optional(),
     preview: z.unknown().optional(),
+    previewStatus: z.unknown().optional(),
     publicDetails: z.object({
       channel_link: z.string().nullable().optional(),
       logo: z.string().nullable().optional(),
@@ -133,6 +137,7 @@ const CreateStreamVideosUploadVideosFromAUrlSchema = z.object({
   created: z.unknown().optional(),
   creator: z.unknown().optional(),
   duration: z.unknown().optional(),
+  encodingMode: z.unknown().optional(),
   input: z.unknown().optional(),
   liveInput: z.unknown().optional(),
   maxDurationSeconds: z.unknown().optional(),
@@ -143,6 +148,7 @@ const CreateStreamVideosUploadVideosFromAUrlSchema = z.object({
   modified: z.unknown().optional(),
   playback: z.unknown().optional(),
   preview: z.unknown().optional(),
+  previewStatus: z.unknown().optional(),
   publicDetails: z.object({
     channel_link: z.string().nullable().optional(),
     logo: z.string().nullable().optional(),
@@ -212,6 +218,7 @@ const CreateALiveInputSchema = z.object({
   keysRotatedAt: z.unknown().optional(),
   meta: z.unknown().optional(),
   modified: z.unknown().optional(),
+  playback: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
   rtmps: z.object({
@@ -247,6 +254,7 @@ const GetStreamLiveInputsRetrieveALiveInputSchema = z.object({
   keysRotatedAt: z.unknown().optional(),
   meta: z.unknown().optional(),
   modified: z.unknown().optional(),
+  playback: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
   rtmps: z.object({
@@ -282,6 +290,7 @@ const StreamLiveInputsDisableALiveInputSchema = z.object({
   keysRotatedAt: z.unknown().optional(),
   meta: z.unknown().optional(),
   modified: z.unknown().optional(),
+  playback: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
   rtmps: z.object({
@@ -317,6 +326,7 @@ const StreamLiveInputsEnableALiveInputSchema = z.object({
   keysRotatedAt: z.unknown().optional(),
   meta: z.unknown().optional(),
   modified: z.unknown().optional(),
+  playback: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
   rtmps: z.object({
@@ -385,6 +395,7 @@ const StreamLiveInputsRotateKeysForALiveInputSchema = z.object({
   keysRotatedAt: z.unknown().optional(),
   meta: z.unknown().optional(),
   modified: z.unknown().optional(),
+  playback: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
   rtmps: z.object({
@@ -425,27 +436,6 @@ const GetStreamVideosStorageUsageSchema = z.object({
     "The total count of videos associated with the account.",
   ),
 }).passthrough();
-
-const GetAccountStreamUsageItemSchema = z.object({
-  streamMinutesViewed: z.number().int().optional().describe(
-    "Number of Stream billable minutes viewed in this time period.",
-  ),
-  ts: z.number().int().optional().describe(
-    "Unix timestamp (epoch seconds) for the start of this time period.",
-  ),
-}).passthrough();
-
-const GetAccountStreamUsageSchema = z.object({
-  items: z.array(GetAccountStreamUsageItemSchema),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
 
 const WatermarkProfilesItemSchema = z.object({
   created: z.unknown().optional(),
@@ -539,6 +529,7 @@ const GetStreamVideosRetrieveVideoDetailsSchema = z.object({
   created: z.unknown().optional(),
   creator: z.unknown().optional(),
   duration: z.unknown().optional(),
+  encodingMode: z.unknown().optional(),
   input: z.unknown().optional(),
   liveInput: z.unknown().optional(),
   maxDurationSeconds: z.unknown().optional(),
@@ -549,6 +540,7 @@ const GetStreamVideosRetrieveVideoDetailsSchema = z.object({
   modified: z.unknown().optional(),
   playback: z.unknown().optional(),
   preview: z.unknown().optional(),
+  previewStatus: z.unknown().optional(),
   publicDetails: z.object({
     channel_link: z.string().nullable().optional(),
     logo: z.string().nullable().optional(),
@@ -580,6 +572,7 @@ const UpdateVideoDetailsSchema = z.object({
   created: z.unknown().optional(),
   creator: z.unknown().optional(),
   duration: z.unknown().optional(),
+  encodingMode: z.unknown().optional(),
   input: z.unknown().optional(),
   liveInput: z.unknown().optional(),
   maxDurationSeconds: z.unknown().optional(),
@@ -590,6 +583,7 @@ const UpdateVideoDetailsSchema = z.object({
   modified: z.unknown().optional(),
   playback: z.unknown().optional(),
   preview: z.unknown().optional(),
+  previewStatus: z.unknown().optional(),
   publicDetails: z.object({
     channel_link: z.string().nullable().optional(),
     logo: z.string().nullable().optional(),
@@ -707,7 +701,7 @@ const CreateSignedUrlTokensForVideosSchema = z.object({
 /** Cloudflare Stream — video upload, encoding, delivery, live streaming */
 export const model = {
   type: "@webframp/cloudflare/stream",
-  version: "2026.11.05.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -780,6 +774,12 @@ export const model = {
     },
     {
       toVersion: "2026.11.05.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.26.1",
       description:
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
@@ -882,12 +882,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "get_account_stream_usage": {
-      description: "Get account Stream usage",
-      schema: GetAccountStreamUsageSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 10,
-    },
     "watermark_profiles": {
       description: "List watermark profiles",
       schema: ListWatermarkProfilesSchema,
@@ -907,13 +901,13 @@ export const model = {
       garbageCollection: 20,
     },
     "stream_webhook_view_webhooks": {
-      description: "View webhooks",
+      description: "View webhook",
       schema: GetStreamWebhookViewWebhooksSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "webhooks": {
-      description: "Create webhooks",
+      description: "Create VOD webhooks",
       schema: CreateWebhooksSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -1195,6 +1189,7 @@ export const model = {
       arguments: z.object({
         allowedOrigins: z.unknown().optional(),
         creator: z.unknown().optional(),
+        encodingMode: z.unknown().optional(),
         input: z.string().optional().describe(
           "A video's URL. The server must be publicly routable and support `HTTP HEAD` r...",
         ),
@@ -1268,6 +1263,7 @@ export const model = {
       arguments: z.object({
         allowedOrigins: z.unknown().optional(),
         creator: z.unknown().optional(),
+        encodingMode: z.unknown().optional(),
         expiry: z.string().optional().describe(
           "The date and time after upload when videos will not be accepted.",
         ),
@@ -2027,64 +2023,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_account_stream_usage: {
-      description: "Get account Stream usage",
-      arguments: z.object({}),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set(["page", "per_page"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/stream/usage`,
-          params,
-        );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource(
-          "get_account_stream_usage",
-          "main",
-          {
-            items: results,
-            truncated,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
-        );
-
-        context.logger.info("Found {count} get_account_stream_usage", {
-          count: results.length,
-        });
-        return { dataHandles: [handle] };
-      },
-    },
     list_watermark_profiles: {
       description: "List watermark profiles",
       arguments: z.object({}),
@@ -2278,7 +2216,7 @@ export const model = {
       },
     },
     get_stream_webhook_view_webhooks: {
-      description: "View webhooks",
+      description: "View webhook",
       arguments: z.object({}),
       execute: async (
         _args: Record<string, unknown>,
@@ -2311,7 +2249,7 @@ export const model = {
       },
     },
     create_webhooks: {
-      description: "Create webhooks",
+      description: "Create VOD webhooks",
       arguments: z.object({
         notificationUrl: z.unknown().optional(),
         notification_url: z.string().optional().describe(

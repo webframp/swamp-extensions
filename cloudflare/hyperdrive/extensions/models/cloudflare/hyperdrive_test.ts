@@ -4,6 +4,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.7";
 import { model } from "./hyperdrive.ts";
 
 // ---------------------------------------------------------------------------
@@ -34,12 +35,16 @@ Deno.test("hyperdrive model: has expected methods", () => {
   assertExists(model.methods.update_hyperdrive);
   assertExists(model.methods.patch_hyperdrive);
   assertExists(model.methods.delete_hyperdrive);
+  assertExists(model.methods.restart_hyperdrive);
+  assertExists(model.methods.create_hyperdrive_database_signature);
 });
 
 Deno.test("hyperdrive model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["hyperdrive"]);
   assertExists(model.resources["patch_hyperdrive"]);
+  assertExists(model.resources["restart_hyperdrive"]);
+  assertExists(model.resources["hyperdrive_database_signature"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -109,11 +114,13 @@ Deno.test({
       "caching": null,
       "created_on": "2017-01-01T00:00:00Z",
       "id": null,
+      "integration": {},
       "modified_on": "2017-01-01T00:00:00Z",
       "mtls": null,
       "name": null,
-      "origin": {},
+      "origin": null,
       "origin_connection_limit": null,
+      "restarted_on": "2017-01-01T00:00:00Z",
     }];
     const { url, server } = startMockCfServer({
       "/hyperdrive/configs": { result: mockData, isCollection: true },
@@ -156,18 +163,20 @@ Deno.test({
 });
 
 Deno.test({
-  name: "hyperdrive model: create_hyperdrive creates and writes resource",
+  name: "hyperdrive model: create_hyperdrive executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
       "caching": null,
       "created_on": "2017-01-01T00:00:00Z",
-      "id": "new-123",
+      "id": null,
+      "integration": {},
       "modified_on": "2017-01-01T00:00:00Z",
       "mtls": null,
       "name": null,
-      "origin": {},
+      "origin": null,
       "origin_connection_limit": null,
+      "restarted_on": "2017-01-01T00:00:00Z",
     };
     const { url, server } = startMockCfServer({
       "/hyperdrive/configs": { result: mockData },
@@ -197,11 +206,13 @@ Deno.test({
         "caching": null,
         "created_on": "2017-01-01T00:00:00Z",
         "id": null,
+        "integration": {},
         "modified_on": "2017-01-01T00:00:00Z",
         "mtls": null,
         "name": null,
-        "origin": {},
+        "origin": null,
         "origin_connection_limit": null,
+        "restarted_on": "2017-01-01T00:00:00Z",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -211,7 +222,6 @@ Deno.test({
       assertExists(
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
-      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -227,11 +237,13 @@ Deno.test({
       "caching": null,
       "created_on": "2017-01-01T00:00:00Z",
       "id": null,
+      "integration": {},
       "modified_on": "2017-01-01T00:00:00Z",
       "mtls": null,
       "name": null,
-      "origin": {},
+      "origin": null,
       "origin_connection_limit": null,
+      "restarted_on": "2017-01-01T00:00:00Z",
     };
     const { url, server } = startMockCfServer({
       "/hyperdrive/configs/test-id-123": { result: mockData },
@@ -281,11 +293,13 @@ Deno.test({
       "caching": null,
       "created_on": "2017-01-01T00:00:00Z",
       "id": null,
+      "integration": {},
       "modified_on": "2017-01-01T00:00:00Z",
       "mtls": null,
       "name": null,
-      "origin": {},
+      "origin": null,
       "origin_connection_limit": null,
+      "restarted_on": "2017-01-01T00:00:00Z",
     };
     const { url, server } = startMockCfServer({
       "/hyperdrive/configs/test-id-123": { result: mockData },
@@ -315,11 +329,13 @@ Deno.test({
         "caching": null,
         "created_on": "2017-01-01T00:00:00Z",
         "id": null,
+        "integration": {},
         "modified_on": "2017-01-01T00:00:00Z",
         "mtls": null,
         "name": null,
-        "origin": {},
+        "origin": null,
         "origin_connection_limit": null,
+        "restarted_on": "2017-01-01T00:00:00Z",
         "hyperdrive_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
@@ -370,6 +386,143 @@ Deno.test({
         context,
       );
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Returned secrets
+// ---------------------------------------------------------------------------
+
+type ZodLike = {
+  _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };
+};
+
+function unwrapZod(schema: ZodLike): ZodLike {
+  let current = schema;
+  while (
+    ["optional", "nullable", "default"].includes(current._def.type) &&
+    current._def.innerType
+  ) {
+    current = current._def.innerType;
+  }
+  return current;
+}
+
+function isMarkedSensitive(field: ZodLike): boolean {
+  let current: ZodLike | undefined = field;
+  while (current) {
+    const meta = z.globalRegistry.get(current as unknown as z.ZodType) as {
+      sensitive?: boolean;
+    } | undefined;
+    if (meta?.sensitive) return true;
+    current = ["optional", "nullable", "default"].includes(current._def.type)
+      ? current._def.innerType
+      : undefined;
+  }
+  return false;
+}
+
+/** Key paths swamp moves into a vault for a resource schema. */
+function sensitivePathsOf(schema: unknown, prefix: string[] = []): string[][] {
+  const object = unwrapZod(schema as ZodLike);
+  if (object._def.type !== "object" || !object._def.shape) return [];
+  const out: string[][] = [];
+  for (const [key, field] of Object.entries(object._def.shape)) {
+    if (isMarkedSensitive(field)) out.push([...prefix, key]);
+    out.push(...sensitivePathsOf(field, [...prefix, key]));
+  }
+  return out;
+}
+
+function valueAt(data: unknown, path: string[]): unknown {
+  let current = data;
+  for (const key of path) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/** The resource as swamp persists it: sensitive fields become vault references. */
+function persistedLikeSwamp(schema: unknown, data: unknown): unknown {
+  const copy = structuredClone(data);
+  for (const path of sensitivePathsOf(schema)) {
+    const parent = valueAt(copy, path.slice(0, -1));
+    const key = path[path.length - 1];
+    if (
+      parent && typeof parent === "object" &&
+      (parent as Record<string, unknown>)[key] != null
+    ) {
+      (parent as Record<string, unknown>)[key] =
+        "${{ vault.get('test-vault', '" + path.join(".") + "') }}";
+    }
+  }
+  return copy;
+}
+
+Deno.test({
+  name:
+    "hyperdrive model: create_hyperdrive_database_signature keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "account_id": "023e105f4ecef8ad9ca31a8372d0c353",
+      "signature": "VAULT-CANARY-0",
+      "timestamp": "1700000000",
+    };
+    const { url, server } = startMockCfServer({
+      "/hyperdrive/integrationsOperations/planetScale/createDatabaseSignature":
+        { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-hyperdrive",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_hyperdrive_database_signature.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "hyperdrive_database_signature");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "hyperdrive_database_signature"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["signature"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("signature"), true);
+      assertEquals(
+        String(valueAt(persisted, ["signature"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
     } finally {
       uninstall();
       await server.shutdown();

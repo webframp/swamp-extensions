@@ -31,13 +31,14 @@ Deno.test("registrar model: has expected methods", () => {
   assertExists(model.methods.create_sandbox_registrar_domain_discovery_check);
   assertExists(model.methods.get_sandbox_registrar_domain_discovery_search);
   assertExists(model.methods.list);
-  assertExists(model.methods.create);
   assertExists(model.methods.get);
+  assertExists(model.methods.create);
   assertExists(model.methods.update);
   assertExists(model.methods.get_status);
   assertExists(model.methods.get_update_status);
   assertExists(model.methods.create_registrar_domain_discovery_check);
   assertExists(model.methods.get_registrar_domain_discovery_search);
+  assertExists(model.methods.create_registrar_domain_discovery_transfer_check);
 });
 
 Deno.test("registrar model: has expected resources", () => {
@@ -45,13 +46,14 @@ Deno.test("registrar model: has expected resources", () => {
   assertExists(model.resources["sandbox_registrar_domain_discovery_check"]);
   assertExists(model.resources["sandbox_registrar_domain_discovery_search"]);
   assertExists(model.resources["list"]);
-  assertExists(model.resources["create"]);
   assertExists(model.resources["get"]);
+  assertExists(model.resources["create"]);
   assertExists(model.resources["update"]);
   assertExists(model.resources["status"]);
   assertExists(model.resources["update_status"]);
   assertExists(model.resources["registrar_domain_discovery_check"]);
   assertExists(model.resources["registrar_domain_discovery_search"]);
+  assertExists(model.resources["registrar_domain_discovery_transfer_check"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -213,19 +215,12 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = [{
-      "auto_renew": true,
-      "created_at": "2025-01-15T10:00:00Z",
-      "domain_name": null,
-      "expires_at": "2026-01-15T10:00:00Z",
-      "locked": true,
-      "privacy_mode": "redaction",
-      "status": "active",
+      "metadata": { "name": "test-value", "tld": "test-value" },
+      "registration_schema": {},
+      "transfer_schema": {},
     }];
     const { url, server } = startMockCfServer({
-      "/registrar-sandbox/registrations": {
-        result: mockData,
-        isCollection: true,
-      },
+      "/registrar-sandbox/extensions": { result: mockData, isCollection: true },
     });
     const uninstall = installFetchMock(url);
 
@@ -272,7 +267,7 @@ Deno.test({
       "completed": false,
       "context": {},
       "created_at": "2024-01-01T00:00:00Z",
-      "error": null,
+      "error": {},
       "links": null,
       "state": "in_progress",
       "updated_at": "2024-01-01T00:00:00Z",
@@ -305,7 +300,7 @@ Deno.test({
         "completed": false,
         "context": {},
         "created_at": "2024-01-01T00:00:00Z",
-        "error": null,
+        "error": {},
         "links": null,
         "state": "in_progress",
         "updated_at": "2024-01-01T00:00:00Z",

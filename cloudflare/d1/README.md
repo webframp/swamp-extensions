@@ -33,20 +33,25 @@ swamp model create @webframp/cloudflare/d1 cf-d1 \
 
 ## Methods
 
-| Method                      | Description                                        |
-| --------------------------- | -------------------------------------------------- |
-| `list_databases`            | List D1 Databases                                  |
-| `create_database`           | Create D1 Database                                 |
-| `get_database`              | Get D1 Database                                    |
-| `update_database`           | Update D1 Database                                 |
-| `update_partial_database`   | Update D1 Database partially                       |
-| `delete_database`           | Delete D1 Database                                 |
-| `create_d1_export_database` | Export D1 Database as SQL                          |
-| `d1_import_database`        | Import SQL into your D1 Database                   |
-| `d1_query_database`         | Query D1 Database                                  |
-| `d1_raw_database_query`     | Raw D1 Database query                              |
-| `get_bookmark`              | Get D1 database bookmark                           |
-| `d1_time_travel_restore`    | Restore D1 Database to a bookmark or point in time |
+| Method                          | Description                                        |
+| ------------------------------- | -------------------------------------------------- |
+| `list_databases`                | List D1 Databases                                  |
+| `create_database`               | Create D1 Database                                 |
+| `get_database`                  | Get D1 Database                                    |
+| `update_database`               | Update D1 Database                                 |
+| `update_partial_database`       | Update D1 Database partially                       |
+| `delete_database`               | Delete D1 Database                                 |
+| `create_d1_export_database`     | Export D1 Database as SQL                          |
+| `d1_import_database`            | Import SQL into your D1 Database                   |
+| `d1_query_database`             | Query D1 Database                                  |
+| `d1_raw_database_query`         | Raw D1 Database query                              |
+| `get_bookmark`                  | Get D1 database bookmark                           |
+| `d1_time_travel_restore`        | Restore D1 Database to a bookmark or point in time |
+| `list_insights_databases`       | List D1 Databases by Usage                         |
+| `list_insights_queries`         | List Top D1 Queries                                |
+| `list_insights_recommendations` | List D1 Index Recommendations                      |
+| `get_insights_settings`         | Get D1 Insights Settings                           |
+| `update_insights_settings`      | Update D1 Insights Settings                        |
 
 ## Development
 

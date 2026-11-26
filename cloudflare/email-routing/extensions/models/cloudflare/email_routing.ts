@@ -108,37 +108,51 @@ const UpdateEmailRoutingSettingsReplaceEmailRoutingSettingsSchema = z.object({
   tag: z.unknown().optional(),
 }).passthrough();
 
-const GetEmailRoutingSettingsEmailRoutingDnsSettingsSchema = z.union([
-  z.object({
-    errors: z.unknown().optional(),
-    messages: z.unknown().optional(),
-    success: z.union([z.literal(true)]).optional(),
-    result_info: z.object({
-      count: z.number().optional(),
-      page: z.number().optional(),
-      per_page: z.number().optional(),
-      total_count: z.number().optional(),
-      total_pages: z.number().optional(),
-    }).optional(),
-    result: z.object({
-      errors: z.unknown().optional(),
-      record: z.array(z.unknown()).optional(),
-    }).optional(),
-  }),
-  z.object({
-    errors: z.unknown().optional(),
-    messages: z.unknown().optional(),
-    success: z.union([z.literal(true)]).optional(),
-    result_info: z.object({
-      count: z.number().optional(),
-      page: z.number().optional(),
-      per_page: z.number().optional(),
-      total_count: z.number().optional(),
-      total_pages: z.number().optional(),
-    }).optional(),
-    result: z.array(z.unknown()).optional(),
-  }),
-]);
+const EmailRoutingSettingsEmailRoutingDnsSettingsItemSchema = z.object({
+  content: z.string().optional().describe("DNS record content."),
+  name: z.string().max(255).optional().describe(
+    "DNS record name (or @ for the zone apex).",
+  ),
+  priority: z.number().min(0).max(65535).optional().describe(
+    "Required for MX, SRV and URI records. Unused by other record types. Records with lower priorities...",
+  ),
+  ttl: z.union([z.number().min(1).max(86400), z.union([z.literal(1)])])
+    .optional().describe(
+      "Time to live, in seconds, of the DNS record. Must be between 60 and 86400, or 1 for 'automatic'.",
+    ),
+  type: z.enum([
+    "A",
+    "AAAA",
+    "CNAME",
+    "HTTPS",
+    "TXT",
+    "SRV",
+    "LOC",
+    "MX",
+    "NS",
+    "CERT",
+    "DNSKEY",
+    "DS",
+    "NAPTR",
+    "SMIMEA",
+    "SSHFP",
+    "SVCB",
+    "TLSA",
+    "URI",
+  ]).optional().describe("DNS record type."),
+}).passthrough();
+
+const ListEmailRoutingSettingsEmailRoutingDnsSettingsSchema = z.object({
+  items: z.array(EmailRoutingSettingsEmailRoutingDnsSettingsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const CreateEmailRoutingSettingsEnableEmailRoutingDnsSchema = z.object({
   created: z.unknown().optional(),
@@ -208,55 +222,26 @@ const GetCatchAllRuleSchema = z.object({
   tag: z.unknown().optional(),
 }).passthrough();
 
-const GetPubliclistsuppressionzoneroutingItemSchema = z.object({
-  created_at: z.string().optional(),
-  email: z.string().optional(),
-  expires_at: z.string().nullable().optional(),
-  id: z.string().optional(),
-  reason: z.string().optional(),
-  zones: z.array(z.string()).optional().default([]),
-}).passthrough();
-
-const GetPubliclistsuppressionzoneroutingSchema = z.object({
-  items: z.array(GetPubliclistsuppressionzoneroutingItemSchema),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
-
-const CreatePostPublicnewsuppressionzoneroutingSchema = z.object({
-  id: z.string().optional(),
-}).passthrough();
-
-const GetPublicgetsuppressionzoneroutingSchema = z.object({
-  created_at: z.string().optional(),
-  email: z.string().optional(),
-  expires_at: z.string().nullable().optional(),
-  id: z.string().optional(),
-  reason: z.string().optional(),
-  zones: z.array(z.string()).optional().default([]),
-}).passthrough();
-
 const SendingSubdomainsItemSchema = z.object({
   created: z.unknown().optional(),
   dkim_selector: z.string().optional().describe(
-    "The DKIM selector used for email signing.",
+    "The DKIM selector used for email signing. Wildcard rows publish the selector and sign with `d=<ba...",
+  ),
+  drop_suppressed_recipients: z.boolean().optional().describe(
+    "Whether a send request that includes a recipient suppressed on this subdomain drops that recipien...",
   ),
   enabled: z.boolean().optional().describe(
     "Whether Email Sending is enabled on this subdomain.",
   ),
   modified: z.unknown().optional(),
-  name: z.string().optional().describe("The subdomain domain name."),
+  name: z.string().optional().describe(
+    "The exact domain name or a leftmost wildcard such as `*.example.com`.",
+  ),
   preview_enabled: z.boolean().optional().describe(
     "Whether sent messages from this subdomain can be previewed in the activity log.",
   ),
   return_path_domain: z.string().optional().describe(
-    "The return-path domain used for bounce handling.",
+    "The return-path domain used for bounce handling. Wildcard rows use `cf-bounce.<base>`.",
   ),
   tag: z.unknown().optional(),
 }).passthrough();
@@ -276,25 +261,30 @@ const ListSendingSubdomainsSchema = z.object({
 const CreateSendingSubdomainSchema = z.object({
   created: z.unknown().optional(),
   dkim_selector: z.string().optional().describe(
-    "The DKIM selector used for email signing.",
+    "The DKIM selector used for email signing. Wildcard rows publish the selector and sign with `d=<ba...",
+  ),
+  drop_suppressed_recipients: z.boolean().optional().describe(
+    "Whether a send request that includes a recipient suppressed on this subdomain drops that recipien...",
   ),
   enabled: z.boolean().optional().describe(
     "Whether Email Sending is enabled on this subdomain.",
   ),
   modified: z.unknown().optional(),
-  name: z.string().optional().describe("The subdomain domain name."),
+  name: z.string().optional().describe(
+    "The exact domain name or a leftmost wildcard such as `*.example.com`.",
+  ),
   preview_enabled: z.boolean().optional().describe(
     "Whether sent messages from this subdomain can be previewed in the activity log.",
   ),
   return_path_domain: z.string().optional().describe(
-    "The return-path domain used for bounce handling.",
+    "The return-path domain used for bounce handling. Wildcard rows use `cf-bounce.<base>`.",
   ),
   tag: z.unknown().optional(),
 }).passthrough();
 
 const CreateEmailSendingSubdomainsPreviewSendingSubdomainSchema = z.object({
   errors: z.array(z.unknown()).optional().describe(
-    "DNS issues detected — missing records that will be created and conflicts with existing records.",
+    "DNS or sending-configuration issues detected during the preview.",
   ),
   records: z.array(z.unknown()).optional().describe(
     "DNS records that would be created for the subdomain.",
@@ -373,38 +363,10 @@ const GetSendingSubdomainDnsStatusSchema = z.object({
     ),
 }).passthrough();
 
-const GetPubliclistsuppressionzonesendingItemSchema = z.object({
-  created_at: z.string().optional(),
-  email: z.string().optional(),
-  expires_at: z.string().nullable().optional(),
-  id: z.string().optional(),
-  reason: z.string().optional(),
-  zones: z.array(z.string()).optional().default([]),
-}).passthrough();
-
-const GetPubliclistsuppressionzonesendingSchema = z.object({
-  items: z.array(GetPubliclistsuppressionzonesendingItemSchema),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
+const GetSendingSubdomainReputationComplaintsSchema = z.object({
+  complaints: z.number().int().min(0).optional().describe(
+    "The number of matched complaints for the sending subdomain in the requested time window.",
   ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
-
-const CreatePostPublicnewsuppressionzonesendingSchema = z.object({
-  id: z.string().optional(),
-}).passthrough();
-
-const GetPublicgetsuppressionzonesendingSchema = z.object({
-  created_at: z.string().optional(),
-  email: z.string().optional(),
-  expires_at: z.string().nullable().optional(),
-  id: z.string().optional(),
-  reason: z.string().optional(),
-  zones: z.array(z.string()).optional().default([]),
 }).passthrough();
 
 // =============================================================================
@@ -414,7 +376,7 @@ const GetPublicgetsuppressionzonesendingSchema = z.object({
 /** Cloudflare Email Routing — rules, addresses, catch-all, DNS setup */
 export const model = {
   type: "@webframp/cloudflare/email-routing",
-  version: "2026.11.03.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -490,6 +452,12 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -518,16 +486,16 @@ export const model = {
       garbageCollection: 20,
     },
     "email_routing_settings_replace_email_routing_settings": {
-      description: "Update Email Routing settings",
+      description: "Apply Email Routing settings",
       schema: UpdateEmailRoutingSettingsReplaceEmailRoutingSettingsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "email_routing_settings_email_routing_dns_settings": {
       description: "Email Routing - DNS settings",
-      schema: GetEmailRoutingSettingsEmailRoutingDnsSettingsSchema,
+      schema: ListEmailRoutingSettingsEmailRoutingDnsSettingsSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
     "email_routing_settings_enable_email_routing_dns": {
       description: "Enable Email Routing",
@@ -536,7 +504,7 @@ export const model = {
       garbageCollection: 20,
     },
     "email_routing_settings_unlock_email_routing_dns": {
-      description: "Unlock Email Routing",
+      description: "Unlock Email Routing DNS records",
       schema: UpdateEmailRoutingSettingsUnlockEmailRoutingDnsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -556,24 +524,6 @@ export const model = {
     "catch_all_rule": {
       description: "Get catch-all rule",
       schema: GetCatchAllRuleSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "get_publiclistsuppressionzonerouting": {
-      description: "List zone email suppressions",
-      schema: GetPubliclistsuppressionzoneroutingSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 10,
-    },
-    "post_publicnewsuppressionzonerouting": {
-      description: "Create zone email suppression",
-      schema: CreatePostPublicnewsuppressionzoneroutingSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "publicgetsuppressionzonerouting": {
-      description: "Get zone email suppression",
-      schema: GetPublicgetsuppressionzoneroutingSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -613,21 +563,9 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "get_publiclistsuppressionzonesending": {
-      description: "List zone email suppressions",
-      schema: GetPubliclistsuppressionzonesendingSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 10,
-    },
-    "post_publicnewsuppressionzonesending": {
-      description: "Create zone email suppression",
-      schema: CreatePostPublicnewsuppressionzonesendingSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "publicgetsuppressionzonesending": {
-      description: "Get zone email suppression",
-      schema: GetPublicgetsuppressionzonesendingSchema,
+    "sending_subdomain_reputation_complaints": {
+      description: "Get sending subdomain complaint count",
+      schema: GetSendingSubdomainReputationComplaintsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -778,7 +716,7 @@ export const model = {
       },
     },
     update_email_routing_settings_replace_email_routing_settings: {
-      description: "Update Email Routing settings",
+      description: "Apply Email Routing settings",
       arguments: z.object({
         enabled: z.union([z.literal(true), z.literal(false)]).optional()
           .describe(
@@ -880,13 +818,15 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_email_routing_settings_email_routing_dns_settings: {
+    list_email_routing_settings_email_routing_dns_settings: {
       description: "Email Routing - DNS settings",
       arguments: z.object({
-        subdomain: z.string().optional(),
+        subdomain: z.string().optional().describe(
+          "Deprecated. When supplied, the response shape differs from the documented default and is not modeled in generated SDKs. Do not rely on this parameter.",
+        ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -900,20 +840,43 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
           apiToken,
-          "GET",
           `/zones/${zoneId}/email/routing/dns`,
+          params,
         );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
 
         const handle = await context.writeResource(
           "email_routing_settings_email_routing_dns_settings",
-          "email_routing_settings_email_routing_dns_settings-current",
-          result,
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
+
         context.logger.info(
-          "Fetched email_routing_settings_email_routing_dns_settings",
-          {},
+          "Found {count} email_routing_settings_email_routing_dns_settings",
+          { count: results.length },
         );
         return { dataHandles: [handle] };
       },
@@ -977,7 +940,7 @@ export const model = {
       },
     },
     update_email_routing_settings_unlock_email_routing_dns: {
-      description: "Unlock Email Routing",
+      description: "Unlock Email Routing DNS records",
       arguments: z.object({
         name: z.unknown().optional(),
       }),
@@ -1360,191 +1323,6 @@ export const model = {
         return { dataHandles: [] };
       },
     },
-    get_publiclistsuppressionzonerouting: {
-      description: "List zone email suppressions",
-      arguments: z.object({
-        page: z.number().optional(),
-        per_page: z.number().optional(),
-        order: z.enum(["email", "expires_at", "created_at"]).optional(),
-        direction: z.enum(["asc", "desc"]).optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, zoneId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set(["page", "per_page"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/zones/${zoneId}/email/routing/suppression`,
-          params,
-        );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource(
-          "get_publiclistsuppressionzonerouting",
-          "main",
-          {
-            items: results,
-            truncated,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
-        );
-
-        context.logger.info(
-          "Found {count} get_publiclistsuppressionzonerouting",
-          { count: results.length },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_post_publicnewsuppressionzonerouting: {
-      description: "Create zone email suppression",
-      arguments: z.object({
-        email: z.string(),
-        expires_at: z.string().nullable().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, zoneId } = context.globalArgs;
-
-        const body = args;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/zones/${zoneId}/email/routing/suppression`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
-        );
-        const handle = await context.writeResource(
-          "post_publicnewsuppressionzonerouting",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created post_publicnewsuppressionzonerouting {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_publicgetsuppressionzonerouting: {
-      description: "Get zone email suppression",
-      arguments: z.object({
-        suppression_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, zoneId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/zones/${zoneId}/email/routing/suppression/${args.suppression_id}`,
-        );
-
-        const handle = await context.writeResource(
-          "publicgetsuppressionzonerouting",
-          sanitizeInstanceName(String(args.suppression_id)),
-          result,
-        );
-        context.logger.info("Fetched publicgetsuppressionzonerouting", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    delete_publicdeletesuppressionzonerouting: {
-      description: "Delete zone email suppression",
-      arguments: z.object({
-        suppression_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, zoneId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/zones/${zoneId}/email/routing/suppression/${args.suppression_id}`,
-        );
-
-        context.logger.info("Deleted resource {id}", {
-          id: args.suppression_id,
-        });
-        return { dataHandles: [] };
-      },
-    },
     list_sending_subdomains: {
       description: "List sending subdomains",
       arguments: z.object({}),
@@ -1607,7 +1385,7 @@ export const model = {
       description: "Create a sending subdomain",
       arguments: z.object({
         name: z.string().describe(
-          "The subdomain name. Must be within the zone.",
+          "The domain name within the zone. A wildcard is allowed only as the complete l...",
         ),
       }),
       execute: async (
@@ -1664,7 +1442,7 @@ export const model = {
       description: "Preview sending subdomain DNS",
       arguments: z.object({
         name: z.string().describe(
-          "The subdomain name. Must be within the zone.",
+          "The domain name within the zone. A wildcard is allowed only as the complete l...",
         ),
       }),
       execute: async (
@@ -1753,7 +1531,10 @@ export const model = {
       description: "Update a sending subdomain",
       arguments: z.object({
         subdomain_id: z.string(),
-        preview_enabled: z.boolean().describe(
+        drop_suppressed_recipients: z.boolean().optional().describe(
+          "Whether a send request that includes a recipient suppressed on this subdomain...",
+        ),
+        preview_enabled: z.boolean().optional().describe(
           "Whether sent messages from this subdomain can be previewed in the activity log.",
         ),
       }),
@@ -1960,127 +1741,12 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_publiclistsuppressionzonesending: {
-      description: "List zone email suppressions",
+    get_sending_subdomain_reputation_complaints: {
+      description: "Get sending subdomain complaint count",
       arguments: z.object({
-        page: z.number().optional(),
-        per_page: z.number().optional(),
-        order: z.enum(["email", "expires_at", "created_at"]).optional(),
-        direction: z.enum(["asc", "desc"]).optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, zoneId } = context.globalArgs;
-        const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set(["page", "per_page"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
-
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/zones/${zoneId}/email/sending/suppression`,
-          params,
-        );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
-
-        const handle = await context.writeResource(
-          "get_publiclistsuppressionzonesending",
-          "main",
-          {
-            items: results,
-            truncated,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
-        );
-
-        context.logger.info(
-          "Found {count} get_publiclistsuppressionzonesending",
-          { count: results.length },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    create_post_publicnewsuppressionzonesending: {
-      description: "Create zone email suppression",
-      arguments: z.object({
-        email: z.string(),
-        expires_at: z.string().nullable().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, zoneId } = context.globalArgs;
-
-        const body = args;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/zones/${zoneId}/email/sending/suppression`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
-        );
-        const handle = await context.writeResource(
-          "post_publicnewsuppressionzonesending",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created post_publicnewsuppressionzonesending {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_publicgetsuppressionzonesending: {
-      description: "Get zone email suppression",
-      arguments: z.object({
-        suppression_id: z.string(),
+        subdomain_id: z.string(),
+        start_at: z.string().optional(),
+        end_at: z.string().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2100,49 +1766,19 @@ export const model = {
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/zones/${zoneId}/email/sending/suppression/${args.suppression_id}`,
+          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/reputation/complaints`,
         );
 
         const handle = await context.writeResource(
-          "publicgetsuppressionzonesending",
-          sanitizeInstanceName(String(args.suppression_id)),
+          "sending_subdomain_reputation_complaints",
+          sanitizeInstanceName(String(args.subdomain_id)),
           result,
         );
-        context.logger.info("Fetched publicgetsuppressionzonesending", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    delete_publicdeletesuppressionzonesending: {
-      description: "Delete zone email suppression",
-      arguments: z.object({
-        suppression_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, zoneId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/zones/${zoneId}/email/sending/suppression/${args.suppression_id}`,
+        context.logger.info(
+          "Fetched sending_subdomain_reputation_complaints",
+          {},
         );
-
-        context.logger.info("Deleted resource {id}", {
-          id: args.suppression_id,
-        });
-        return { dataHandles: [] };
+        return { dataHandles: [handle] };
       },
     },
   },

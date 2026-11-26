@@ -13,7 +13,7 @@
  *
  * Or manually: check https://github.com/cloudflare/api-schemas/commits/main
  */
-export const SCHEMA_SHA = "29f8cda983dbd30c426fcc9d2767b2548409ac46";
+export const SCHEMA_SHA = "df5b78801a495a6843e4c104737be9b22d6bdc7f";
 
 /** Base URL for fetching the OpenAPI spec */
 export const SCHEMA_URL =

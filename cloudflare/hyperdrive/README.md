@@ -17,6 +17,11 @@ swamp vault create local_encryption cloudflare   # once, if you have no vault ye
 swamp vault put cloudflare API_TOKEN             # prompts; the value never touches shell history
 ```
 
+Some methods return secrets, which swamp stores in a vault (see
+[Secrets](#secrets)). Because the model declares such fields, swamp refuses to
+run any of its methods, reads included, until a vault exists
+(`swamp vault create local_encryption cloudflare`).
+
 When `apiToken` is unset, the model falls back to the `CLOUDFLARE_API_TOKEN`
 environment variable. Swamp does not redact that variable, so it is not
 recommended.
@@ -33,25 +38,33 @@ swamp model create @webframp/cloudflare/hyperdrive cf-hyperdrive \
 
 ## Methods
 
-| Method              | Description       |
-| ------------------- | ----------------- |
-| `list_hyperdrive`   | List Hyperdrives  |
-| `create_hyperdrive` | Create Hyperdrive |
-| `get_hyperdrive`    | Get Hyperdrive    |
-| `update_hyperdrive` | Update Hyperdrive |
-| `patch_hyperdrive`  | Patch Hyperdrive  |
-| `delete_hyperdrive` | Delete Hyperdrive |
+| Method                                 | Description               |
+| -------------------------------------- | ------------------------- |
+| `list_hyperdrive`                      | List Hyperdrives          |
+| `create_hyperdrive`                    | Create Hyperdrive         |
+| `get_hyperdrive`                       | Get Hyperdrive            |
+| `update_hyperdrive`                    | Replace Hyperdrive        |
+| `patch_hyperdrive`                     | Update Hyperdrive         |
+| `delete_hyperdrive`                    | Delete Hyperdrive         |
+| `restart_hyperdrive`                   | Restart Hyperdrive        |
+| `create_hyperdrive_database_signature` | Create Database Signature |
 
 ## Secrets
 
 Pass every secret input as a `${{ vault.get("<vault>", "<KEY>") }}` expression,
 never as a literal value. Swamp then redacts it from logs and run records.
 
-| Method              | Secret inputs                      | Stored in a vault | Removed before storing |
-| ------------------- | ---------------------------------- | ----------------- | ---------------------- |
-| `create_hyperdrive` | `access_client_secret`, `password` | —                 | —                      |
-| `update_hyperdrive` | `access_client_secret`, `password` | —                 | —                      |
-| `patch_hyperdrive`  | `access_client_secret`, `password` | —                 | —                      |
+When a method returns a secret, swamp stores it in a vault and the resource
+keeps only a vault reference. Because the model declares such fields, swamp
+refuses to run any of its methods, reads included, until a vault exists
+(`swamp vault create local_encryption cloudflare`).
+
+| Method                                 | Secret inputs                      | Stored in a vault | Removed before storing |
+| -------------------------------------- | ---------------------------------- | ----------------- | ---------------------- |
+| `create_hyperdrive`                    | `access_client_secret`, `password` | —                 | —                      |
+| `update_hyperdrive`                    | `access_client_secret`, `password` | —                 | —                      |
+| `patch_hyperdrive`                     | `access_client_secret`, `password` | —                 | —                      |
+| `create_hyperdrive_database_signature` | —                                  | `signature`       | —                      |
 
 ## Development
 

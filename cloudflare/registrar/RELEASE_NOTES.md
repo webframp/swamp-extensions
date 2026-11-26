@@ -1,22 +1,5 @@
-## 2026.11.03.1
+## 2026.11.26.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Added:** `create_registrar_domain_discovery_transfer_check`.
 
-## 2026.10.21.1
-
-**Changed:** The README and the `apiToken` description now lead with a vault.
-Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
-to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
-environment variable still works as a fallback, but swamp does not redact it, so
-it is no longer recommended. The missing-token error now says the same.
-
-**Fixed:** Create methods whose response carries no `id` wrote every result to
-one instance named `created`, so each call overwrote the previous one. They now
-name the instance by the response's `id` when present, else by the path
-parameter that scopes the call, else by a hash of the request arguments (secret
-arguments left out). Affected:
-`create_sandbox_registrar_domain_discovery_check`, `create` and
-`create_registrar_domain_discovery_check`.
-
-**Upgrade note:** Results earlier versions wrote to the `created` instance stay
-there; new runs write under the new names.
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Additive only; existing methods are unchanged.

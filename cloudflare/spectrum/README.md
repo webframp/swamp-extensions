@@ -43,6 +43,7 @@ swamp model create @webframp/cloudflare/spectrum cf-spectrum \
 | `get_spectrum_application_configuration`                                | Get Spectrum application configuration                                |
 | `update_spectrum_application_configuration_using_a_name_for_the_origin` | Update Spectrum application configuration using a name for the origin |
 | `delete_spectrum_application`                                           | Delete Spectrum application                                           |
+| `list_spectrum_application_protocols`                                   | List Spectrum application protocols                                   |
 
 ## Development
 

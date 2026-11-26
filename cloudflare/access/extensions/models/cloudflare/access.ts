@@ -29,32 +29,119 @@ const GlobalArgsSchema = z.object({
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
+const GetMcpPortalsApiPortalToolCallTimeseriesSchema = z.object({
+  aggregate: z.boolean().optional(),
+  end: z.number().int().optional(),
+  granularity: z.enum(["daily", "monthly"]).optional(),
+  response_status: z.enum(["success", "error", "cached", "all"]).optional(),
+  series: z.array(z.object({
+    count: z.number().int().optional(),
+    day: z.string().optional(),
+  })).optional(),
+  start: z.number().int().optional(),
+  total: z.number().int().optional(),
+  tz: z.string().regex(
+    new RegExp(
+      "^(utc|Z|\\+(?:(?:0\\d|1[0-3]):[0-5]\\d|14:00)|-(?:(?:0\\d|1[01]):[0-5]\\d|12:00))$",
+    ),
+  ).optional(),
+}).passthrough();
+
+const GetMcpPortalsApiServerToolCallTimeseriesSchema = z.object({
+  aggregate: z.boolean().optional(),
+  end: z.number().int().optional(),
+  granularity: z.enum(["daily", "monthly"]).optional(),
+  response_status: z.enum(["success", "error", "cached", "all"]).optional(),
+  series: z.array(z.object({
+    count: z.number().int().optional(),
+    day: z.string().optional(),
+  })).optional(),
+  start: z.number().int().optional(),
+  total: z.number().int().optional(),
+  tz: z.string().regex(
+    new RegExp(
+      "^(utc|Z|\\+(?:(?:0\\d|1[0-3]):[0-5]\\d|14:00)|-(?:(?:0\\d|1[01]):[0-5]\\d|12:00))$",
+    ),
+  ).optional(),
+}).passthrough();
+
+const GetMcpPortalsApiAccountToolCallTimeseriesSchema = z.object({
+  aggregate: z.boolean().optional(),
+  end: z.number().int().optional(),
+  granularity: z.enum(["daily", "monthly"]).optional(),
+  response_status: z.enum(["success", "error", "cached", "all"]).optional(),
+  series: z.array(z.object({
+    count: z.number().int().optional(),
+    day: z.string().optional(),
+  })).optional(),
+  start: z.number().int().optional(),
+  total: z.number().int().optional(),
+  tz: z.string().regex(
+    new RegExp(
+      "^(utc|Z|\\+(?:(?:0\\d|1[0-3]):[0-5]\\d|14:00)|-(?:(?:0\\d|1[01]):[0-5]\\d|12:00))$",
+    ),
+  ).optional(),
+}).passthrough();
+
 const PortalsItemSchema = z.object({
-  allow_code_mode: z.boolean().optional().default(true).describe(
-    "Allow remote code execution in Dynamic Workers (beta)",
+  allow_code_mode: z.boolean().optional().describe(
+    "Deprecated: use `code_mode` for new integrations. `true` maps to any non-off Code Mode policy; `f...",
   ),
+  code_mode: z.enum(["off", "opt_in", "default_on", "enforced"]).optional()
+    .describe(
+      "Code Mode policy for this portal. `off`: Code Mode is unavailable; query parameters are ignored. ...",
+    ),
   created_at: z.string().optional(),
   created_by: z.string().optional(),
-  description: z.string().max(512).optional(),
+  description: z.string().max(512).optional().describe(
+    "Optional description of the MCP portal.",
+  ),
   hostname: z.string().regex(
     new RegExp(
       "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
     ),
-  ).optional(),
+  ).optional().describe("Hostname where the MCP portal is available."),
   id: z.string().min(1).max(32).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("portal id"),
+  ).optional().describe("Unique identifier for the MCP portal."),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
-  name: z.string().max(350).optional(),
+  name: z.string().max(350).optional().describe(
+    "Display name for the MCP portal.",
+  ),
   secure_web_gateway: z.boolean().optional().default(false).describe(
-    "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
+    "Route outbound MCP traffic through Zero Trust Secure Web Gateway.",
   ),
   servers: z.array(z.object({
+    auth_config_summary: z.object({
+      auth_mode: z.enum(["dcr", "manual"]).optional(),
+      client_secret_version: z.number().optional(),
+      config: z.object({
+        authorization_endpoint: z.string().optional(),
+        issuer: z.string().optional(),
+        resource: z.string().optional(),
+        revocation_endpoint: z.string().optional(),
+        token_endpoint: z.string().optional(),
+      }).optional(),
+      has_client_secret: z.boolean().optional(),
+      registration_info: z.object({
+        client_id: z.string().optional(),
+        redirect_uris: z.array(z.string()).optional(),
+        scope: z.string().optional(),
+        token_endpoint_auth_method: z.string().optional(),
+      }).optional(),
+    }).optional(),
     auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional(),
+    authentication_status: z.enum([
+      "not_required",
+      "required",
+      "connected",
+      "stale",
+      "manual",
+    ]).optional(),
     created_at: z.string().optional(),
     created_by: z.string().optional(),
-    default_disabled: z.boolean().optional().default(false),
+    default_disabled: z.boolean().optional(),
     description: z.string().max(512).nullable().optional(),
     error: z.string().optional(),
     error_details: z.object({
@@ -74,31 +161,34 @@ const PortalsItemSchema = z.object({
     modified_at: z.string().optional(),
     modified_by: z.string().optional(),
     name: z.string().max(350).optional(),
-    on_behalf: z.boolean().optional().default(true),
+    on_behalf: z.boolean().optional(),
     prompts: z.array(z.record(z.string(), z.unknown())).optional(),
+    registered_at: z.string().nullable().optional(),
     secure_web_gateway: z.boolean().optional().default(false),
     server_id: z.string().min(1).max(32).regex(
       new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
     ).optional(),
-    status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
-      "waiting",
-    ),
+    status: z.enum(["waiting", "ready", "stale", "error"]).optional(),
     tools: z.array(z.record(z.string(), z.unknown())).optional(),
     updated_prompts: z.array(z.object({
       enabled: z.boolean().optional(),
       name: z.string().optional(),
       portal_alias: z.string().optional(),
       portal_description: z.string().optional(),
+      portal_enabled: z.boolean().optional(),
       server_alias: z.string().optional(),
       server_description: z.string().optional(),
+      server_enabled: z.boolean().optional(),
     })).optional(),
     updated_tools: z.array(z.object({
       enabled: z.boolean().optional(),
       name: z.string().optional(),
       portal_alias: z.string().optional(),
       portal_description: z.string().optional(),
+      portal_enabled: z.boolean().optional(),
       server_alias: z.string().optional(),
       server_description: z.string().optional(),
+      server_enabled: z.boolean().optional(),
     })).optional(),
   })).optional(),
 }).passthrough();
@@ -116,31 +206,64 @@ const ListPortalsSchema = z.object({
 });
 
 const GetMcpPortalsApiFetchGatewaysSchema = z.object({
-  allow_code_mode: z.boolean().optional().default(true).describe(
-    "Allow remote code execution in Dynamic Workers (beta)",
+  allow_code_mode: z.boolean().optional().describe(
+    "Deprecated: use `code_mode` for new integrations. `true` maps to any non-off Code Mode policy; `f...",
   ),
+  code_mode: z.enum(["off", "opt_in", "default_on", "enforced"]).optional()
+    .describe(
+      "Code Mode policy for this portal. `off`: Code Mode is unavailable; query parameters are ignored. ...",
+    ),
   created_at: z.string().optional(),
   created_by: z.string().optional(),
-  description: z.string().max(512).optional(),
+  description: z.string().max(512).optional().describe(
+    "Optional description of the MCP portal.",
+  ),
   hostname: z.string().regex(
     new RegExp(
       "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
     ),
-  ).optional(),
+  ).optional().describe("Hostname where the MCP portal is available."),
   id: z.string().min(1).max(32).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("portal id"),
+  ).optional().describe("Unique identifier for the MCP portal."),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
-  name: z.string().max(350).optional(),
+  name: z.string().max(350).optional().describe(
+    "Display name for the MCP portal.",
+  ),
   secure_web_gateway: z.boolean().optional().default(false).describe(
-    "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
+    "Route outbound MCP traffic through Zero Trust Secure Web Gateway.",
   ),
   servers: z.array(z.object({
+    auth_config_summary: z.object({
+      auth_mode: z.enum(["dcr", "manual"]).optional(),
+      client_secret_version: z.number().optional(),
+      config: z.object({
+        authorization_endpoint: z.string().optional(),
+        issuer: z.string().optional(),
+        resource: z.string().optional(),
+        revocation_endpoint: z.string().optional(),
+        token_endpoint: z.string().optional(),
+      }).optional(),
+      has_client_secret: z.boolean().optional(),
+      registration_info: z.object({
+        client_id: z.string().optional(),
+        redirect_uris: z.array(z.string()).optional(),
+        scope: z.string().optional(),
+        token_endpoint_auth_method: z.string().optional(),
+      }).optional(),
+    }).optional(),
     auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional(),
+    authentication_status: z.enum([
+      "not_required",
+      "required",
+      "connected",
+      "stale",
+      "manual",
+    ]).optional(),
     created_at: z.string().optional(),
     created_by: z.string().optional(),
-    default_disabled: z.boolean().optional().default(false),
+    default_disabled: z.boolean().optional(),
     description: z.string().max(512).nullable().optional(),
     error: z.string().optional(),
     error_details: z.object({
@@ -160,40 +283,81 @@ const GetMcpPortalsApiFetchGatewaysSchema = z.object({
     modified_at: z.string().optional(),
     modified_by: z.string().optional(),
     name: z.string().max(350).optional(),
-    on_behalf: z.boolean().optional().default(true),
+    on_behalf: z.boolean().optional(),
     prompts: z.array(z.record(z.string(), z.unknown())).optional(),
+    registered_at: z.string().nullable().optional(),
     secure_web_gateway: z.boolean().optional().default(false),
     server_id: z.string().min(1).max(32).regex(
       new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
     ).optional(),
-    status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
-      "waiting",
-    ),
+    status: z.enum(["waiting", "ready", "stale", "error"]).optional(),
     tools: z.array(z.record(z.string(), z.unknown())).optional(),
     updated_prompts: z.array(z.object({
       enabled: z.boolean().optional(),
       name: z.string().optional(),
       portal_alias: z.string().optional(),
       portal_description: z.string().optional(),
+      portal_enabled: z.boolean().optional(),
       server_alias: z.string().optional(),
       server_description: z.string().optional(),
+      server_enabled: z.boolean().optional(),
     })).optional(),
     updated_tools: z.array(z.object({
       enabled: z.boolean().optional(),
       name: z.string().optional(),
       portal_alias: z.string().optional(),
       portal_description: z.string().optional(),
+      portal_enabled: z.boolean().optional(),
       server_alias: z.string().optional(),
       server_description: z.string().optional(),
+      server_enabled: z.boolean().optional(),
     })).optional(),
   })).optional(),
 }).passthrough();
 
+const GetMcpPortalsApiEffectiveRedirectUriSchema = z.object({
+  redirect_uri: z.string().optional(),
+  source: z.enum(["per_portal", "shared_mcp22"]).optional(),
+}).passthrough();
+
 const ServersItemSchema = z.object({
-  auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional(),
+  auth_config_summary: z.object({
+    auth_mode: z.enum(["dcr", "manual"]).optional(),
+    client_secret_version: z.number().optional(),
+    config: z.object({
+      authorization_endpoint: z.string().optional(),
+      issuer: z.string().optional(),
+      resource: z.string().optional(),
+      revocation_endpoint: z.string().optional(),
+      token_endpoint: z.string().optional(),
+    }).optional(),
+    has_client_secret: z.boolean().optional(),
+    registration_info: z.object({
+      client_id: z.string().optional(),
+      redirect_uris: z.array(z.string()).optional(),
+      scope: z.string().optional(),
+      token_endpoint_auth_method: z.string().optional(),
+    }).optional(),
+  }).optional().describe(
+    "Safe subset of auth_credentials surfaced to the dashboard. Includes auth_mode (dcr|manual), has_c...",
+  ),
+  auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional().describe(
+    "Authentication method used to connect to the upstream MCP server.",
+  ),
+  authentication_status: z.enum([
+    "not_required",
+    "required",
+    "connected",
+    "stale",
+    "manual",
+  ]).optional().describe(
+    "Whether administrative authentication is required before capabilities can be synced. Manual OAuth...",
+  ),
   created_at: z.string().optional(),
   created_by: z.string().optional(),
-  description: z.string().max(512).nullable().optional(),
+  description: z.string().max(512).nullable().optional().describe(
+    "Optional description of the MCP server.",
+  ),
   error: z.string().optional(),
   error_details: z.object({
     cause: z.string().optional(),
@@ -202,26 +366,31 @@ const ServersItemSchema = z.object({
     retryable: z.boolean().optional(),
     status_code: z.number().optional(),
   }).optional(),
-  hostname: z.string().optional(),
+  hostname: z.string().optional().describe("URL of the upstream MCP endpoint."),
   id: z.string().min(1).max(32).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("server id"),
+  ).optional().describe("Unique identifier for the MCP server."),
   is_shared_oauth_callback_enabled: z.boolean().optional().default(false)
     .describe(
-      "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback endpoint as the red...",
+      "When true, per-user authorization uses the shared Cloudflare callback URL as the 'redirect_uri' i...",
     ),
   last_successful_sync: z.string().optional(),
   last_synced: z.string().optional(),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
-  name: z.string().max(350).optional(),
-  prompts: z.array(z.record(z.string(), z.unknown())).optional(),
-  secure_web_gateway: z.boolean().optional().default(false).describe(
-    "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
+  name: z.string().max(350).optional().describe(
+    "Display name for the MCP server.",
   ),
-  status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
-    "waiting",
-  ).describe("Current sync state of the server"),
+  prompts: z.array(z.record(z.string(), z.unknown())).optional(),
+  registered_at: z.string().nullable().optional().describe(
+    "Timestamp of the most recent successful admin OAuth registration.",
+  ),
+  secure_web_gateway: z.boolean().optional().default(false).describe(
+    "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway.",
+  ),
+  status: z.enum(["waiting", "ready", "stale", "error"]).optional().describe(
+    "Current sync state of the server",
+  ),
   tools: z.array(z.record(z.string(), z.unknown())).optional(),
   updated_prompts: z.array(z.object({
     alias: z.string().max(40).regex(
@@ -230,7 +399,7 @@ const ServersItemSchema = z.object({
     description: z.string().optional(),
     enabled: z.boolean().optional(),
     name: z.string().optional(),
-  })).optional(),
+  })).optional().describe("Server-wide prompt capability overrides."),
   updated_tools: z.array(z.object({
     alias: z.string().max(40).regex(
       new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
@@ -238,7 +407,7 @@ const ServersItemSchema = z.object({
     description: z.string().optional(),
     enabled: z.boolean().optional(),
     name: z.string().optional(),
-  })).optional(),
+  })).optional().describe("Server-wide tool capability overrides."),
 }).passthrough();
 
 const ListServersSchema = z.object({
@@ -254,10 +423,43 @@ const ListServersSchema = z.object({
 });
 
 const GetMcpPortalsApiFetchServersSchema = z.object({
-  auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional(),
+  auth_config_summary: z.object({
+    auth_mode: z.enum(["dcr", "manual"]).optional(),
+    client_secret_version: z.number().optional(),
+    config: z.object({
+      authorization_endpoint: z.string().optional(),
+      issuer: z.string().optional(),
+      resource: z.string().optional(),
+      revocation_endpoint: z.string().optional(),
+      token_endpoint: z.string().optional(),
+    }).optional(),
+    has_client_secret: z.boolean().optional(),
+    registration_info: z.object({
+      client_id: z.string().optional(),
+      redirect_uris: z.array(z.string()).optional(),
+      scope: z.string().optional(),
+      token_endpoint_auth_method: z.string().optional(),
+    }).optional(),
+  }).optional().describe(
+    "Safe subset of auth_credentials surfaced to the dashboard. Includes auth_mode (dcr|manual), has_c...",
+  ),
+  auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional().describe(
+    "Authentication method used to connect to the upstream MCP server.",
+  ),
+  authentication_status: z.enum([
+    "not_required",
+    "required",
+    "connected",
+    "stale",
+    "manual",
+  ]).optional().describe(
+    "Whether administrative authentication is required before capabilities can be synced. Manual OAuth...",
+  ),
   created_at: z.string().optional(),
   created_by: z.string().optional(),
-  description: z.string().max(512).nullable().optional(),
+  description: z.string().max(512).nullable().optional().describe(
+    "Optional description of the MCP server.",
+  ),
   error: z.string().optional(),
   error_details: z.object({
     cause: z.string().optional(),
@@ -266,26 +468,31 @@ const GetMcpPortalsApiFetchServersSchema = z.object({
     retryable: z.boolean().optional(),
     status_code: z.number().optional(),
   }).optional(),
-  hostname: z.string().optional(),
+  hostname: z.string().optional().describe("URL of the upstream MCP endpoint."),
   id: z.string().min(1).max(32).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).optional().describe("server id"),
+  ).optional().describe("Unique identifier for the MCP server."),
   is_shared_oauth_callback_enabled: z.boolean().optional().default(false)
     .describe(
-      "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback endpoint as the red...",
+      "When true, per-user authorization uses the shared Cloudflare callback URL as the 'redirect_uri' i...",
     ),
   last_successful_sync: z.string().optional(),
   last_synced: z.string().optional(),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
-  name: z.string().max(350).optional(),
-  prompts: z.array(z.record(z.string(), z.unknown())).optional(),
-  secure_web_gateway: z.boolean().optional().default(false).describe(
-    "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
+  name: z.string().max(350).optional().describe(
+    "Display name for the MCP server.",
   ),
-  status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
-    "waiting",
-  ).describe("Current sync state of the server"),
+  prompts: z.array(z.record(z.string(), z.unknown())).optional(),
+  registered_at: z.string().nullable().optional().describe(
+    "Timestamp of the most recent successful admin OAuth registration.",
+  ),
+  secure_web_gateway: z.boolean().optional().default(false).describe(
+    "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway.",
+  ),
+  status: z.enum(["waiting", "ready", "stale", "error"]).optional().describe(
+    "Current sync state of the server",
+  ),
   tools: z.array(z.record(z.string(), z.unknown())).optional(),
   updated_prompts: z.array(z.object({
     alias: z.string().max(40).regex(
@@ -294,7 +501,7 @@ const GetMcpPortalsApiFetchServersSchema = z.object({
     description: z.string().optional(),
     enabled: z.boolean().optional(),
     name: z.string().optional(),
-  })).optional(),
+  })).optional().describe("Server-wide prompt capability overrides."),
   updated_tools: z.array(z.object({
     alias: z.string().max(40).regex(
       new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
@@ -302,7 +509,7 @@ const GetMcpPortalsApiFetchServersSchema = z.object({
     description: z.string().optional(),
     enabled: z.boolean().optional(),
     name: z.string().optional(),
-  })).optional(),
+  })).optional().describe("Server-wide tool capability overrides."),
 }).passthrough();
 
 const McpPortalsApiSyncServerSchema = z.object({
@@ -318,6 +525,20 @@ const McpPortalsApiSyncServerSchema = z.object({
 }).passthrough();
 
 const AccessApplicationsItemSchema = z.union([
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    type: z.unknown().optional(),
+    user_populations: z.array(z.unknown()).optional(),
+  }),
   z.object({
     aud: z.unknown().optional(),
     created_at: z.unknown().optional(),
@@ -459,8 +680,8 @@ const AccessApplicationsItemSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("App Launcher"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("App Launcher"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     app_launcher_logo_url: z.unknown().optional(),
@@ -481,8 +702,8 @@ const AccessApplicationsItemSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Warp Login App"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("Warp Login App"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -497,8 +718,8 @@ const AccessApplicationsItemSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Clientless Web Isolation"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("Clientless Web Isolation"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -513,8 +734,10 @@ const AccessApplicationsItemSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Gateway Proxy"),
+    domain: z.string().regex(
+      new RegExp("^[A-Za-z0-9]{10}\\.proxy\\.cloudflare-gateway\\.com$"),
+    ).optional(),
+    name: z.string().optional().default("Gateway Proxy"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -537,7 +760,9 @@ const AccessApplicationsItemSchema = z.union([
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
     updated_at: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
     name: z.unknown().optional(),
+    session_duration: z.string().optional().default("24h"),
     type: z.unknown().optional(),
     target_criteria: z.array(z.unknown()).optional(),
     policies: z.array(z.unknown()).optional(),
@@ -652,6 +877,20 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
     updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    type: z.unknown().optional(),
+    user_populations: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
     allow_authenticate_via_warp: z.unknown().optional(),
     allow_iframe: z.unknown().optional(),
     allowed_idps: z.unknown().optional(),
@@ -788,8 +1027,8 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("App Launcher"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("App Launcher"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     app_launcher_logo_url: z.unknown().optional(),
@@ -810,8 +1049,8 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Warp Login App"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("Warp Login App"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -826,8 +1065,8 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Clientless Web Isolation"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("Clientless Web Isolation"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -842,8 +1081,10 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Gateway Proxy"),
+    domain: z.string().regex(
+      new RegExp("^[A-Za-z0-9]{10}\\.proxy\\.cloudflare-gateway\\.com$"),
+    ).optional(),
+    name: z.string().optional().default("Gateway Proxy"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -866,7 +1107,9 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
     updated_at: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
     name: z.unknown().optional(),
+    session_duration: z.string().optional().default("24h"),
     type: z.unknown().optional(),
     target_criteria: z.array(z.unknown()).optional(),
     policies: z.array(z.unknown()).optional(),
@@ -987,6 +1230,20 @@ const GetAnAccessApplicationSchema = z.union([
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
     updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    type: z.unknown().optional(),
+    user_populations: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
     allow_authenticate_via_warp: z.unknown().optional(),
     allow_iframe: z.unknown().optional(),
     allowed_idps: z.unknown().optional(),
@@ -1123,8 +1380,8 @@ const GetAnAccessApplicationSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("App Launcher"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("App Launcher"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     app_launcher_logo_url: z.unknown().optional(),
@@ -1145,8 +1402,8 @@ const GetAnAccessApplicationSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Warp Login App"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("Warp Login App"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -1161,8 +1418,8 @@ const GetAnAccessApplicationSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Clientless Web Isolation"),
+    domain: z.string().optional(),
+    name: z.string().optional().default("Clientless Web Isolation"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -1177,8 +1434,10 @@ const GetAnAccessApplicationSchema = z.union([
     custom_deny_url: z.unknown().optional(),
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
-    domain: z.unknown().optional(),
-    name: z.unknown().optional().default("Gateway Proxy"),
+    domain: z.string().regex(
+      new RegExp("^[A-Za-z0-9]{10}\\.proxy\\.cloudflare-gateway\\.com$"),
+    ).optional(),
+    name: z.string().optional().default("Gateway Proxy"),
     session_duration: z.unknown().optional(),
     type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
@@ -1201,7 +1460,9 @@ const GetAnAccessApplicationSchema = z.union([
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
     updated_at: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
     name: z.unknown().optional(),
+    session_duration: z.string().optional().default("24h"),
     type: z.unknown().optional(),
     target_criteria: z.array(z.unknown()).optional(),
     policies: z.array(z.unknown()).optional(),
@@ -1304,17 +1565,32 @@ const GetAShortLivedCertificateCaSchema = z.object({
   public_key: z.unknown().optional(),
 }).passthrough();
 
-const AccessAppPoliciesItemSchema = z.object({
-  created_at: z.unknown().optional(),
-  decision: z.unknown().optional(),
-  exclude: z.unknown().optional(),
-  id: z.unknown().optional(),
-  include: z.unknown().optional(),
-  name: z.unknown().optional(),
-  require: z.unknown().optional(),
-  updated_at: z.unknown().optional(),
-  precedence: z.unknown().optional(),
-}).passthrough();
+const AccessAppPoliciesItemSchema = z.union([
+  z.object({
+    created_at: z.unknown().optional(),
+    decision: z.unknown().optional(),
+    exclude: z.unknown().optional(),
+    id: z.unknown().optional(),
+    include: z.unknown().optional(),
+    name: z.unknown().optional(),
+    policy_resolution_account_id: z.unknown().optional(),
+    require: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    account_id: z.unknown().optional(),
+    precedence: z.unknown().optional(),
+  }),
+  z.object({
+    created_at: z.unknown().optional(),
+    decision: z.unknown().optional(),
+    exclude: z.unknown().optional(),
+    id: z.unknown().optional(),
+    include: z.unknown().optional(),
+    name: z.unknown().optional(),
+    policy_resolution_account_id: z.unknown().optional(),
+    require: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
+]);
 
 const ListAccessAppPoliciesSchema = z.object({
   items: z.array(AccessAppPoliciesItemSchema),
@@ -1328,29 +1604,59 @@ const ListAccessAppPoliciesSchema = z.object({
   ),
 });
 
-const CreateAnAccessPolicySchema = z.object({
-  created_at: z.unknown().optional(),
-  decision: z.unknown().optional(),
-  exclude: z.unknown().optional(),
-  id: z.unknown().optional(),
-  include: z.unknown().optional(),
-  name: z.unknown().optional(),
-  require: z.unknown().optional(),
-  updated_at: z.unknown().optional(),
-  precedence: z.unknown().optional(),
-}).passthrough();
+const CreateAnAccessPolicySchema = z.union([
+  z.object({
+    created_at: z.unknown().optional(),
+    decision: z.unknown().optional(),
+    exclude: z.unknown().optional(),
+    id: z.unknown().optional(),
+    include: z.unknown().optional(),
+    name: z.unknown().optional(),
+    policy_resolution_account_id: z.unknown().optional(),
+    require: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    account_id: z.unknown().optional(),
+    precedence: z.unknown().optional(),
+  }),
+  z.object({
+    created_at: z.unknown().optional(),
+    decision: z.unknown().optional(),
+    exclude: z.unknown().optional(),
+    id: z.unknown().optional(),
+    include: z.unknown().optional(),
+    name: z.unknown().optional(),
+    policy_resolution_account_id: z.unknown().optional(),
+    require: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
+]);
 
-const UpdateAccessPoliciesConvertReusableSchema = z.object({
-  created_at: z.unknown().optional(),
-  decision: z.unknown().optional(),
-  exclude: z.unknown().optional(),
-  id: z.unknown().optional(),
-  include: z.unknown().optional(),
-  name: z.unknown().optional(),
-  require: z.unknown().optional(),
-  updated_at: z.unknown().optional(),
-  precedence: z.unknown().optional(),
-}).passthrough();
+const UpdateAccessPoliciesConvertReusableSchema = z.union([
+  z.object({
+    created_at: z.unknown().optional(),
+    decision: z.unknown().optional(),
+    exclude: z.unknown().optional(),
+    id: z.unknown().optional(),
+    include: z.unknown().optional(),
+    name: z.unknown().optional(),
+    policy_resolution_account_id: z.unknown().optional(),
+    require: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    account_id: z.unknown().optional(),
+    precedence: z.unknown().optional(),
+  }),
+  z.object({
+    created_at: z.unknown().optional(),
+    decision: z.unknown().optional(),
+    exclude: z.unknown().optional(),
+    id: z.unknown().optional(),
+    include: z.unknown().optional(),
+    name: z.unknown().optional(),
+    policy_resolution_account_id: z.unknown().optional(),
+    require: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
+]);
 
 const GetAccessApplicationsTestAccessPoliciesSchema = z.object({
   app_state: z.object({
@@ -1469,11 +1775,15 @@ const GetAnMtlsCertificateSchema = z.object({
 
 const CustomPagesItemSchema = z.object({
   app_count: z.unknown().optional(),
+  contract_version: z.unknown().optional(),
   created_at: z.unknown().optional(),
   name: z.unknown().optional(),
   type: z.unknown().optional(),
   uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  warnings: z.array(z.unknown()).optional().describe(
+    "Advisory validation findings returned when creating or updating a template. Omitted when empty.",
+  ),
 }).passthrough();
 
 const ListCustomPagesSchema = z.object({
@@ -1490,11 +1800,28 @@ const ListCustomPagesSchema = z.object({
 
 const CreateACustomPageSchema = z.object({
   app_count: z.unknown().optional(),
+  contract_version: z.unknown().optional(),
   created_at: z.unknown().optional(),
   name: z.unknown().optional(),
   type: z.unknown().optional(),
   uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  warnings: z.array(z.unknown()).optional().describe(
+    "Advisory validation findings returned when creating or updating a template. Omitted when empty.",
+  ),
+}).passthrough();
+
+const CreateAccessCustomPagesValidateACustomPageTemplateSchema = z.object({
+  errors: z.array(z.unknown()).optional().describe(
+    "Blocking findings; a non-empty list means the template cannot be published.",
+  ),
+  page_type: z.unknown().optional(),
+  version: z.number().int().optional().describe(
+    "The contract version the template was validated against.",
+  ),
+  warnings: z.array(z.unknown()).optional().describe(
+    "Advisory findings that do not block publishing.",
+  ),
 }).passthrough();
 
 const SshCaItemSchema = z.object({
@@ -1585,11 +1912,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1619,11 +1948,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1653,11 +1984,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1687,11 +2020,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1721,11 +2056,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1755,11 +2092,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1789,11 +2128,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1823,11 +2164,71 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
+    ]).optional(),
+  }),
+  z.object({
+    config: z.object({
+      client_id: z.string().optional(),
+      client_secret: z.string().optional(),
+      issuer_url: z.string().optional(),
+    }).optional(),
+    id: z.unknown().optional(),
+    name: z.unknown().optional(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum(["duo"]).optional(),
+  }),
+  z.object({
+    config: z.unknown().optional(),
+    id: z.unknown().optional(),
+    name: z.unknown().optional(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "duo",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1857,11 +2258,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1891,45 +2294,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -1937,12 +2308,15 @@ const AccessIdentityProvidersItemSchema = z.union([
       attributes: z.array(z.string()).optional(),
       email_attribute_name: z.string().optional(),
       enable_encryption: z.boolean().optional().default(false),
+      force_authn: z.boolean().optional().default(false),
       header_attributes: z.array(z.object({
         attribute_name: z.string().optional(),
         header_name: z.string().optional(),
       })).optional(),
       idp_public_certs: z.array(z.string()).optional(),
       issuer_url: z.string().optional(),
+      max_sso_url_length: z.number().int().min(512).max(100000).optional(),
+      metadata_url: z.string().optional(),
       sign_request: z.boolean().optional().default(false),
       sso_target_url: z.string().optional(),
     }).optional(),
@@ -1971,11 +2345,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -2005,11 +2381,13 @@ const AccessIdentityProvidersItemSchema = z.union([
       "google",
       "linkedin",
       "oidc",
+      "duo",
       "okta",
       "onelogin",
       "pingone",
       "yandex",
       "cloudflare",
+      "passkeys",
     ]).optional(),
   }),
   z.object({
@@ -2053,6 +2431,27 @@ const AccessIdentityProvidersItemSchema = z.union([
     }).optional(),
     type: z.enum(["cloudflare"]).optional(),
   }),
+  z.object({
+    config: z.object({
+      login_page_auto_prompt: z.boolean().optional().default(false),
+      redirect_url: z.string().optional(),
+    }).optional(),
+    id: z.unknown().optional(),
+    name: z.unknown().optional(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum(["passkeys"]).optional(),
+  }),
 ]);
 
 const ListAccessIdentityProvidersSchema = z.object({
@@ -2069,7 +2468,7 @@ const ListAccessIdentityProvidersSchema = z.object({
 
 const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.object({
   config: z.object({
-    client_secret: z.string().optional().meta({ sensitive: true }),
+    client_secret: z.unknown().optional().meta({ sensitive: true }),
   }).passthrough().nullable().optional(),
   id: z.unknown().optional(),
   name: z.unknown().optional(),
@@ -2098,7 +2497,7 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.object({
 
 const GetAnAccessIdentityProviderSchema = z.object({
   config: z.object({
-    client_secret: z.string().optional().meta({ sensitive: true }),
+    client_secret: z.unknown().optional().meta({ sensitive: true }),
   }).passthrough().nullable().optional(),
   id: z.unknown().optional(),
   name: z.unknown().optional(),
@@ -2167,6 +2566,24 @@ const ListScimGroupResourcesSchema = z.object({
   ),
 });
 
+const GetScimGroupResourceSchema = z.object({
+  displayName: z.string().optional().describe(
+    "The display name of the SCIM Group resource.",
+  ),
+  externalId: z.unknown().optional(),
+  id: z.unknown().optional(),
+  members: z.array(z.object({
+    $ref: z.string().optional(),
+    display: z.string().optional(),
+    type: z.enum(["User", "Group"]).optional(),
+    value: z.string().optional(),
+  })).optional().describe("The direct members of the SCIM Group resource."),
+  meta: z.unknown().optional(),
+  schemas: z.array(z.string()).optional().describe(
+    "The list of URIs which indicate the attributes contained within a SCIM resource.",
+  ),
+}).passthrough();
+
 const ScimUserResourcesItemSchema = z.object({
   active: z.boolean().optional().describe(
     "Determines the status of the SCIM User resource.",
@@ -2200,6 +2617,28 @@ const ListScimUserResourcesSchema = z.object({
     "Extension that collected this data",
   ),
 });
+
+const GetScimUserResourceSchema = z.object({
+  active: z.boolean().optional().describe(
+    "Determines the status of the SCIM User resource.",
+  ),
+  displayName: z.string().optional().describe(
+    "The name of the SCIM User resource.",
+  ),
+  emails: z.array(z.object({
+    primary: z.boolean().optional(),
+    type: z.string().optional(),
+    value: z.string().optional(),
+  })).optional(),
+  externalId: z.string().optional().describe(
+    "The IdP-generated Id of the SCIM resource.",
+  ),
+  id: z.unknown().optional(),
+  meta: z.unknown().optional(),
+  schemas: z.array(z.string()).optional().describe(
+    "The list of URIs which indicate the attributes contained within a SCIM resource.",
+  ),
+}).passthrough();
 
 const CreateSchema = z.object({
   created_at: z.unknown().optional(),
@@ -2305,16 +2744,48 @@ const GetYourZeroTrustOrganizationSchema = z.object({
   custom_pages: z.unknown().optional(),
   deny_unmatched_requests: z.unknown().optional(),
   deny_unmatched_requests_exempted_zone_names: z.unknown().optional(),
+  disable_end_user_app_creation: z.unknown().optional(),
   is_ui_read_only: z.unknown().optional(),
   login_design: z.unknown().optional(),
   mfa_config: z.unknown().optional(),
   mfa_piv_key_requirements: z.unknown().optional(),
   mfa_required_for_all_apps: z.unknown().optional(),
   name: z.unknown().optional(),
+  service_token_inactivity: z.unknown().optional(),
   session_duration: z.unknown().optional(),
+  strict_service_token_auth: z.unknown().optional(),
   ui_read_only_toggle_reason: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   user_seat_expiration_inactive_time: z.unknown().optional(),
+  warp_auth_non_browser_401: z.unknown().optional(),
+  warp_auth_session_duration: z.unknown().optional(),
+  trusted_accounts: z.array(z.string()).optional().describe(
+    "The account tags of organizations trusted by this organization for policy and device posture shar...",
+  ),
+}).passthrough();
+
+const PatchYourZeroTrustOrganizationSchema = z.object({
+  allow_authenticate_via_warp: z.unknown().optional(),
+  auth_domain: z.unknown().optional(),
+  auto_redirect_to_identity: z.unknown().optional(),
+  created_at: z.unknown().optional(),
+  custom_pages: z.unknown().optional(),
+  deny_unmatched_requests: z.unknown().optional(),
+  deny_unmatched_requests_exempted_zone_names: z.unknown().optional(),
+  disable_end_user_app_creation: z.unknown().optional(),
+  is_ui_read_only: z.unknown().optional(),
+  login_design: z.unknown().optional(),
+  mfa_config: z.unknown().optional(),
+  mfa_piv_key_requirements: z.unknown().optional(),
+  mfa_required_for_all_apps: z.unknown().optional(),
+  name: z.unknown().optional(),
+  service_token_inactivity: z.unknown().optional(),
+  session_duration: z.unknown().optional(),
+  strict_service_token_auth: z.unknown().optional(),
+  ui_read_only_toggle_reason: z.unknown().optional(),
+  updated_at: z.unknown().optional(),
+  user_seat_expiration_inactive_time: z.unknown().optional(),
+  warp_auth_non_browser_401: z.unknown().optional(),
   warp_auth_session_duration: z.unknown().optional(),
 }).passthrough();
 
@@ -2329,6 +2800,16 @@ const CreateZeroTrustOrganizationRevokeAllAccessTokensForAUserSchema = z.union([
   z.literal(false),
 ]);
 
+const GetTrustSettingsSchema = z.object({
+  grant_trust_to_all_accounts_in_org: z.unknown().optional(),
+  trusting_accounts: z.unknown().optional(),
+}).passthrough();
+
+const UpdateZeroTrustOrganizationReplaceTrustSettingsSchema = z.object({
+  grant_trust_to_all_accounts_in_org: z.unknown().optional(),
+  trusting_accounts: z.unknown().optional(),
+}).passthrough();
+
 const AccessReusablePoliciesItemSchema = z.object({
   created_at: z.unknown().optional(),
   decision: z.unknown().optional(),
@@ -2336,8 +2817,10 @@ const AccessReusablePoliciesItemSchema = z.object({
   id: z.unknown().optional(),
   include: z.unknown().optional(),
   name: z.unknown().optional(),
+  policy_resolution_account_id: z.unknown().optional(),
   require: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  account_id: z.unknown().optional(),
   app_count: z.unknown().optional(),
   reusable: z.union([z.literal(true)]).optional(),
 }).passthrough();
@@ -2361,8 +2844,10 @@ const CreateAnAccessReusablePolicySchema = z.object({
   id: z.unknown().optional(),
   include: z.unknown().optional(),
   name: z.unknown().optional(),
+  policy_resolution_account_id: z.unknown().optional(),
   require: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  account_id: z.unknown().optional(),
   app_count: z.unknown().optional(),
   reusable: z.union([z.literal(true)]).optional(),
 }).passthrough();
@@ -2482,10 +2967,15 @@ const ServiceTokensItemSchema = z.object({
   client_id: z.unknown().optional(),
   created_at: z.unknown().optional(),
   duration: z.unknown().optional(),
+  enabled: z.unknown().optional(),
   expires_at: z.unknown().optional(),
   id: z.unknown().optional(),
   last_seen_at: z.unknown().optional(),
+  leak_report_url: z.unknown().optional(),
+  leak_reported_at: z.unknown().optional(),
+  leak_reporter: z.unknown().optional(),
   name: z.unknown().optional(),
+  tags: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
 
@@ -2506,8 +2996,10 @@ const CreateAServiceTokenSchema = z.object({
   client_secret: z.unknown().optional().meta({ sensitive: true }),
   created_at: z.unknown().optional(),
   duration: z.unknown().optional(),
+  enabled: z.unknown().optional(),
   id: z.string().optional().describe("The ID of the service token."),
   name: z.unknown().optional(),
+  tags: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
 
@@ -2515,10 +3007,15 @@ const AccessServiceTokensRefreshAServiceTokenSchema = z.object({
   client_id: z.unknown().optional(),
   created_at: z.unknown().optional(),
   duration: z.unknown().optional(),
+  enabled: z.unknown().optional(),
   expires_at: z.unknown().optional(),
   id: z.unknown().optional(),
   last_seen_at: z.unknown().optional(),
+  leak_report_url: z.unknown().optional(),
+  leak_reported_at: z.unknown().optional(),
+  leak_reporter: z.unknown().optional(),
   name: z.unknown().optional(),
+  tags: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
 
@@ -2527,8 +3024,10 @@ const CreateAccessServiceTokensRotateAServiceTokenSchema = z.object({
   client_secret: z.unknown().optional().meta({ sensitive: true }),
   created_at: z.unknown().optional(),
   duration: z.unknown().optional(),
+  enabled: z.unknown().optional(),
   id: z.string().optional().describe("The ID of the service token."),
   name: z.unknown().optional(),
+  tags: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
 
@@ -2571,6 +3070,68 @@ const GetATagSchema = z.object({
   updated_at: z.unknown().optional(),
 }).passthrough();
 
+const UserPopulationsItemSchema = z.object({
+  created_at: z.unknown().optional(),
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  updated_at: z.unknown().optional(),
+}).passthrough();
+
+const ListUserPopulationsSchema = z.object({
+  items: z.array(UserPopulationsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CreateUserPopulationSchema = z.object({
+  created_at: z.unknown().optional(),
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  updated_at: z.unknown().optional(),
+}).passthrough();
+
+const ListUsersSchema = z.object({
+  Resources: z.array(z.unknown()).optional(),
+  itemsPerPage: z.number().int().optional(),
+  schemas: z.array(z.string()).optional(),
+  startIndex: z.number().int().optional(),
+  totalResults: z.number().int().optional(),
+}).passthrough();
+
+const CreateUserSchema = z.object({
+  active: z.boolean().optional(),
+  displayName: z.string().optional(),
+  emails: z.array(z.unknown()).optional(),
+  externalId: z.string().optional(),
+  id: z.string().optional(),
+  meta: z.unknown().optional(),
+  name: z.unknown().optional(),
+  schemas: z.array(z.string()).optional().describe(
+    "The SCIM schemas that apply to this resource.",
+  ),
+  userName: z.string().optional(),
+}).passthrough();
+
+const UpdateAccessUserPopulationsReplaceUserSchema = z.object({
+  active: z.boolean().optional(),
+  displayName: z.string().optional(),
+  emails: z.array(z.unknown()).optional(),
+  externalId: z.string().optional(),
+  id: z.string().optional(),
+  meta: z.unknown().optional(),
+  name: z.unknown().optional(),
+  schemas: z.array(z.string()).optional().describe(
+    "The SCIM schemas that apply to this resource.",
+  ),
+  userName: z.string().optional(),
+}).passthrough();
+
 const GetUsersItemSchema = z.object({
   access_seat: z.unknown().optional(),
   active_device_count: z.unknown().optional(),
@@ -2596,20 +3157,6 @@ const GetUsersSchema = z.object({
     "Extension that collected this data",
   ),
 });
-
-const CreateUserSchema = z.object({
-  access_seat: z.unknown().optional(),
-  active_device_count: z.unknown().optional(),
-  created_at: z.unknown().optional(),
-  email: z.unknown().optional(),
-  gateway_seat: z.unknown().optional(),
-  id: z.unknown().optional(),
-  last_successful_login: z.unknown().optional(),
-  name: z.unknown().optional(),
-  seat_uid: z.unknown().optional(),
-  uid: z.unknown().optional(),
-  updated_at: z.unknown().optional(),
-}).passthrough();
 
 const GetActiveSessionsItemSchema = z.object({
   expiration: z.number().int().optional(),
@@ -2719,6 +3266,12 @@ const GetLastSeenIdentitySchema = z.object({
   service_token_status: z.boolean().optional(),
   user_uuid: z.string().optional(),
   version: z.number().optional(),
+  passkeys: z.array(z.object({
+    created_at: z.string().optional(),
+    id: z.string().optional(),
+    last_used_at: z.string().optional(),
+    name: z.string().optional(),
+  })).optional().describe("Active passkey enrollments for the user."),
 }).passthrough();
 
 // =============================================================================
@@ -2728,7 +3281,7 @@ const GetLastSeenIdentitySchema = z.object({
 /** Cloudflare Access (Zero Trust) — applications, policies, identity providers, certificates */
 export const model = {
   type: "@webframp/cloudflare/access",
-  version: "2026.11.05.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -2810,9 +3363,33 @@ export const model = {
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
+    "mcp_portals_api_portal_tool_call_timeseries": {
+      description: "Per-portal MCP tool-call timeseries",
+      schema: GetMcpPortalsApiPortalToolCallTimeseriesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "mcp_portals_api_server_tool_call_timeseries": {
+      description: "Per-server MCP tool-call timeseries",
+      schema: GetMcpPortalsApiServerToolCallTimeseriesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "mcp_portals_api_account_tool_call_timeseries": {
+      description: "Account-global MCP tool-call timeseries",
+      schema: GetMcpPortalsApiAccountToolCallTimeseriesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "portals": {
       description: "List MCP Portals",
       schema: ListPortalsSchema,
@@ -2825,6 +3402,12 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
+    "mcp_portals_api_effective_redirect_uri": {
+      description: "Resolve an MCP server OAuth redirect URI",
+      schema: GetMcpPortalsApiEffectiveRedirectUriSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "servers": {
       description: "List MCP Servers",
       schema: ListServersSchema,
@@ -2832,7 +3415,7 @@ export const model = {
       garbageCollection: 10,
     },
     "mcp_portals_api_fetch_servers": {
-      description: "Read the details of a MCP Server",
+      description: "Read the details of an MCP Server",
       schema: GetMcpPortalsApiFetchServersSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -2939,6 +3522,12 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
+    "access_custom_pages_validate_a_custom_page_template": {
+      description: "Validate a custom page template",
+      schema: CreateAccessCustomPagesValidateACustomPageTemplateSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "ssh_ca": {
       description: "List SSH Certificate Authorities (CA)",
       schema: ListSshCaSchema,
@@ -2993,11 +3582,23 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
+    "scim_group_resource": {
+      description: "Get a SCIM Group resource",
+      schema: GetScimGroupResourceSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "scim_user_resources": {
       description: "List SCIM User resources",
       schema: ListScimUserResourcesSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "scim_user_resource": {
+      description: "Get a SCIM User resource",
+      schema: GetScimUserResourceSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
     "create": {
       description: "Create an IdP federation grant",
@@ -3041,6 +3642,12 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
+    "patch_your_zero_trust_organization": {
+      description: "Partially update your Zero Trust organization",
+      schema: PatchYourZeroTrustOrganizationSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "your_zero_trust_organization_doh_settings": {
       description: "Get your Zero Trust organization DoH settings",
       schema: GetYourZeroTrustOrganizationDohSettingsSchema,
@@ -3050,6 +3657,18 @@ export const model = {
     "zero_trust_organization_revoke_all_access_tokens_for_a_user": {
       description: "Revoke all Access tokens for a user",
       schema: CreateZeroTrustOrganizationRevokeAllAccessTokensForAUserSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "trust_settings": {
+      description: "Get Zero Trust organization trust settings",
+      schema: GetTrustSettingsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "zero_trust_organization_replace_trust_settings": {
+      description: "Replace Zero Trust organization trust settings",
+      schema: UpdateZeroTrustOrganizationReplaceTrustSettingsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -3149,17 +3768,41 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
+    "user_populations": {
+      description: "List user populations",
+      schema: ListUserPopulationsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "user_population": {
+      description: "Create a user population",
+      schema: CreateUserPopulationSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "list_users": {
+      description: "List users in a user population",
+      schema: ListUsersSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "user": {
+      description: "Create a user population user",
+      schema: CreateUserSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "access_user_populations_replace_user": {
+      description: "Replace a user population user",
+      schema: UpdateAccessUserPopulationsReplaceUserSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "get_users": {
       description: "Get users",
       schema: GetUsersSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "user": {
-      description: "Create a user",
-      schema: CreateUserSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "get_active_sessions": {
       description: "Get active sessions",
@@ -3188,6 +3831,149 @@ export const model = {
   },
 
   methods: {
+    get_mcp_portals_api_portal_tool_call_timeseries: {
+      description: "Per-portal MCP tool-call timeseries",
+      arguments: z.object({
+        portal_id: z.string(),
+        granularity: z.enum(["daily", "monthly"]).optional(),
+        aggregate: z.enum(["true", "false"]).optional(),
+        tz: z.string().optional(),
+        days: z.number().optional().describe(
+          "Daily trailing-window size; defaults to 7 and is ignored for monthly",
+        ),
+        response_status: z.enum(["success", "error", "cached", "all"])
+          .optional().describe(
+            "Response status to count; 'all' counts every status",
+          ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/ai-controls/mcp/analytics/portals/${args.portal_id}/tool-calls/timeseries`,
+        );
+
+        const handle = await context.writeResource(
+          "mcp_portals_api_portal_tool_call_timeseries",
+          sanitizeInstanceName(String(args.portal_id)),
+          result,
+        );
+        context.logger.info(
+          "Fetched mcp_portals_api_portal_tool_call_timeseries",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    get_mcp_portals_api_server_tool_call_timeseries: {
+      description: "Per-server MCP tool-call timeseries",
+      arguments: z.object({
+        server_id: z.string(),
+        granularity: z.enum(["daily", "monthly"]).optional(),
+        aggregate: z.enum(["true", "false"]).optional(),
+        tz: z.string().optional(),
+        days: z.number().optional().describe(
+          "Daily trailing-window size; defaults to 7 and is ignored for monthly",
+        ),
+        response_status: z.enum(["success", "error", "cached", "all"])
+          .optional().describe(
+            "Response status to count; 'all' counts every status",
+          ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/ai-controls/mcp/analytics/servers/${args.server_id}/tool-calls/timeseries`,
+        );
+
+        const handle = await context.writeResource(
+          "mcp_portals_api_server_tool_call_timeseries",
+          sanitizeInstanceName(String(args.server_id)),
+          result,
+        );
+        context.logger.info(
+          "Fetched mcp_portals_api_server_tool_call_timeseries",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    get_mcp_portals_api_account_tool_call_timeseries: {
+      description: "Account-global MCP tool-call timeseries",
+      arguments: z.object({
+        granularity: z.enum(["daily", "monthly"]).optional(),
+        aggregate: z.enum(["true", "false"]).optional(),
+        tz: z.string().optional(),
+        days: z.number().optional().describe(
+          "Daily trailing-window size; defaults to 7 and is ignored for monthly",
+        ),
+        response_status: z.enum(["success", "error", "cached", "all"])
+          .optional().describe(
+            "Response status to count; 'all' counts every status",
+          ),
+      }),
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/ai-controls/mcp/analytics/tool-calls/timeseries`,
+        );
+
+        const handle = await context.writeResource(
+          "mcp_portals_api_account_tool_call_timeseries",
+          "mcp_portals_api_account_tool_call_timeseries-current",
+          result,
+        );
+        context.logger.info(
+          "Fetched mcp_portals_api_account_tool_call_timeseries",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
     list_portals: {
       description: "List MCP Portals",
       arguments: z.object({
@@ -3248,21 +4034,27 @@ export const model = {
       description: "Create a new MCP Portal",
       arguments: z.object({
         allow_code_mode: z.boolean().optional().describe(
-          "Allow remote code execution in Dynamic Workers (beta)",
+          "Deprecated: use `code_mode` for new integrations. `true` maps to any non-off ...",
         ),
-        description: z.string().max(512).optional(),
+        code_mode: z.enum(["off", "opt_in", "default_on", "enforced"])
+          .optional().describe(
+            "Code Mode policy for this portal. `off`: Code Mode is unavailable; query para...",
+          ),
+        description: z.string().max(512).optional().describe(
+          "Optional description of the MCP portal.",
+        ),
         hostname: z.string().regex(
           new RegExp(
             "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
           ),
-        ),
-        name: z.string().max(350),
+        ).describe("Hostname where the MCP portal is available."),
+        name: z.string().max(350).describe("Display name for the MCP portal."),
         secure_web_gateway: z.boolean().optional().describe(
-          "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
+          "Route outbound MCP traffic through Zero Trust Secure Web Gateway.",
         ),
         servers: z.array(z.object({
-          default_disabled: z.boolean().optional().default(false),
-          on_behalf: z.boolean().optional().default(true),
+          default_disabled: z.boolean().optional(),
+          on_behalf: z.boolean().optional(),
           server_id: z.string().min(1).max(32).regex(
             new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
           ),
@@ -3282,7 +4074,9 @@ export const model = {
             enabled: z.boolean().optional(),
             name: z.string(),
           })).optional(),
-        })).optional(),
+        })).optional().describe(
+          "MCP servers attached to the portal and their portal-specific settings.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3360,25 +4154,33 @@ export const model = {
       },
     },
     update_portals: {
-      description: "Update a MCP Portal",
+      description: "Update an MCP Portal",
       arguments: z.object({
         id: z.string(),
         allow_code_mode: z.boolean().optional().describe(
-          "Allow remote code execution in Dynamic Workers (beta)",
+          "Deprecated: use `code_mode` for new integrations. `true` maps to any non-off ...",
         ),
-        description: z.string().max(512).optional(),
+        code_mode: z.enum(["off", "opt_in", "default_on", "enforced"])
+          .optional().describe(
+            "Code Mode policy for this portal. `off`: Code Mode is unavailable; query para...",
+          ),
+        description: z.string().max(512).optional().describe(
+          "Optional description of the MCP portal.",
+        ),
         hostname: z.string().regex(
           new RegExp(
             "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
           ),
-        ).optional(),
-        name: z.string().max(350).optional(),
+        ).optional().describe("Hostname where the MCP portal is available."),
+        name: z.string().max(350).optional().describe(
+          "Display name for the MCP portal.",
+        ),
         secure_web_gateway: z.boolean().optional().describe(
-          "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
+          "Route outbound MCP traffic through Zero Trust Secure Web Gateway.",
         ),
         servers: z.array(z.object({
-          default_disabled: z.boolean().optional().default(false),
-          on_behalf: z.boolean().optional().default(true),
+          default_disabled: z.boolean().optional(),
+          on_behalf: z.boolean().optional(),
           server_id: z.string().min(1).max(32).regex(
             new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
           ),
@@ -3398,7 +4200,9 @@ export const model = {
             enabled: z.boolean().optional(),
             name: z.string(),
           })).optional(),
-        })).optional(),
+        })).optional().describe(
+          "MCP servers attached to the portal and their portal-specific settings.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3439,7 +4243,7 @@ export const model = {
       },
     },
     delete_portals: {
-      description: "Delete a MCP Portal",
+      description: "Delete an MCP Portal",
       arguments: z.object({
         id: z.string(),
       }),
@@ -3467,6 +4271,45 @@ export const model = {
 
         context.logger.info("Deleted resource {id}", { id: args.id });
         return { dataHandles: [] };
+      },
+    },
+    get_mcp_portals_api_effective_redirect_uri: {
+      description: "Resolve an MCP server OAuth redirect URI",
+      arguments: z.object({
+        portal_id: z.string(),
+        server_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.portal_id}/servers/${args.server_id}/effective-redirect-uri`,
+        );
+
+        const handle = await context.writeResource(
+          "mcp_portals_api_effective_redirect_uri",
+          sanitizeInstanceName(String(args.server_id)),
+          result,
+        );
+        context.logger.info(
+          "Fetched mcp_portals_api_effective_redirect_uri",
+          {},
+        );
+        return { dataHandles: [handle] };
       },
     },
     list_servers: {
@@ -3529,17 +4372,24 @@ export const model = {
       description: "Create a new MCP Server",
       arguments: z.object({
         auth_credentials: z.string().optional().describe(
-          "Secret: pass a vault.get expression, never a literal value.",
+          'Credential configuration for the upstream MCP server. For auth_type "bearer",... Secret: pass a vault.get expression, never a literal value.',
         ).meta({ sensitive: true }),
-        auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
-        description: z.string().max(512).nullable().optional(),
-        hostname: z.string(),
-        is_shared_oauth_callback_enabled: z.boolean().optional().describe(
-          "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback...",
+        auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).describe(
+          "Authentication method used to connect to the upstream MCP server.",
         ),
-        name: z.string().max(350),
+        client_secret: z.string().optional().describe(
+          "Provides 'client_secret' for a pre-registered OAuth client. This field is acc... Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
+        description: z.string().max(512).nullable().optional().describe(
+          "Optional description of the MCP server.",
+        ),
+        hostname: z.string().describe("URL of the upstream MCP endpoint."),
+        is_shared_oauth_callback_enabled: z.boolean().optional().describe(
+          "When true, per-user authorization uses the shared Cloudflare callback URL as ...",
+        ),
+        name: z.string().max(350).describe("Display name for the MCP server."),
         secure_web_gateway: z.boolean().optional().describe(
-          "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
+          "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway.",
         ),
         updated_prompts: z.array(z.object({
           alias: z.string().max(40).regex(
@@ -3548,7 +4398,7 @@ export const model = {
           description: z.string().optional(),
           enabled: z.boolean().optional(),
           name: z.string(),
-        })).optional(),
+        })).optional().describe("Server-wide prompt capability overrides."),
         updated_tools: z.array(z.object({
           alias: z.string().max(40).regex(
             new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
@@ -3556,7 +4406,7 @@ export const model = {
           description: z.string().optional(),
           enabled: z.boolean().optional(),
           name: z.string(),
-        })).optional(),
+        })).optional().describe("Server-wide tool capability overrides."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3585,7 +4435,10 @@ export const model = {
 
         // No id in the response and no path parameter to key on: name the
         // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>(["auth_credentials"]);
+        const secretArgs = new Set<string>([
+          "auth_credentials",
+          "client_secret",
+        ]);
         const requestKey = Object.entries(args)
           .filter(([k]) => !secretArgs.has(k))
           .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
@@ -3599,7 +4452,7 @@ export const model = {
       },
     },
     get_mcp_portals_api_fetch_servers: {
-      description: "Read the details of a MCP Server",
+      description: "Read the details of an MCP Server",
       arguments: z.object({
         id: z.string(),
       }),
@@ -3634,19 +4487,26 @@ export const model = {
       },
     },
     update_servers: {
-      description: "Update a MCP Server",
+      description: "Update an MCP Server",
       arguments: z.object({
         id: z.string(),
         auth_credentials: z.string().optional().describe(
-          "Secret: pass a vault.get expression, never a literal value.",
+          'Credential configuration for the upstream MCP server. For auth_type "bearer",... Secret: pass a vault.get expression, never a literal value.',
         ).meta({ sensitive: true }),
-        description: z.string().max(512).nullable().optional(),
-        is_shared_oauth_callback_enabled: z.boolean().optional().describe(
-          "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback...",
+        client_secret: z.string().optional().describe(
+          "Provides 'client_secret' for a pre-registered OAuth client. This field is acc... Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
+        description: z.string().max(512).nullable().optional().describe(
+          "Optional description of the MCP server.",
         ),
-        name: z.string().max(350).optional(),
+        is_shared_oauth_callback_enabled: z.boolean().optional().describe(
+          "When true, per-user authorization uses the shared Cloudflare callback URL as ...",
+        ),
+        name: z.string().max(350).optional().describe(
+          "Display name for the MCP server.",
+        ),
         secure_web_gateway: z.boolean().optional().describe(
-          "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
+          "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway.",
         ),
         updated_prompts: z.array(z.object({
           alias: z.string().max(40).regex(
@@ -3655,7 +4515,9 @@ export const model = {
           description: z.string().optional(),
           enabled: z.boolean().optional(),
           name: z.string(),
-        })).optional(),
+        })).nullable().optional().describe(
+          "Prompt overrides. Omit to preserve, send [] to clear, or null to reset the fi...",
+        ),
         updated_tools: z.array(z.object({
           alias: z.string().max(40).regex(
             new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
@@ -3663,7 +4525,9 @@ export const model = {
           description: z.string().optional(),
           enabled: z.boolean().optional(),
           name: z.string(),
-        })).optional(),
+        })).nullable().optional().describe(
+          "Tool overrides. Omit to preserve, send [] to clear, or null to reset the fiel...",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3704,7 +4568,7 @@ export const model = {
       },
     },
     delete_servers: {
-      description: "Delete a MCP Server",
+      description: "Delete an MCP Server",
       arguments: z.object({
         id: z.string(),
       }),
@@ -4352,12 +5216,6 @@ export const model = {
       description: "Create an Access application policy",
       arguments: z.object({
         app_id: z.string().describe("The application ID."),
-        precedence: z.unknown().optional(),
-        decision: z.unknown(),
-        exclude: z.unknown().optional(),
-        include: z.unknown(),
-        name: z.unknown(),
-        require: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4388,16 +5246,12 @@ export const model = {
           body,
         );
 
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(created?.id ?? String(args.app_id)),
-        );
         const handle = await context.writeResource(
           "an_access_policy",
-          id,
-          result,
+          "create_an_access_policy-current",
+          result ?? {},
         );
-        context.logger.info("Created an_access_policy {id}", { id });
+        context.logger.info("Executed create_an_access_policy", {});
         return { dataHandles: [handle] };
       },
     },
@@ -4442,12 +5296,6 @@ export const model = {
       arguments: z.object({
         app_id: z.string().describe("The application ID."),
         policy_id: z.string().describe("The policy ID."),
-        precedence: z.unknown().optional(),
-        decision: z.unknown(),
-        exclude: z.unknown().optional(),
-        include: z.unknown(),
-        name: z.unknown(),
-        require: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5105,6 +5953,7 @@ export const model = {
       description: "Create a custom page",
       arguments: z.object({
         app_count: z.unknown().optional(),
+        contract_version: z.unknown().optional(),
         created_at: z.unknown().optional(),
         custom_html: z.string().describe("Custom page HTML."),
         name: z.unknown(),
@@ -5158,6 +6007,62 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    create_access_custom_pages_validate_a_custom_page_template: {
+      description: "Validate a custom page template",
+      arguments: z.object({
+        template: z.string().describe("The Liquid template to validate."),
+        type: z.unknown(),
+        version: z.number().int().optional().describe(
+          "Contract version to validate against; omit for the latest.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/custom_pages/validate`,
+          body,
+        );
+
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
+        );
+        const handle = await context.writeResource(
+          "access_custom_pages_validate_a_custom_page_template",
+          id,
+          result,
+        );
+        context.logger.info(
+          "Created access_custom_pages_validate_a_custom_page_template {id}",
+          { id },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
     get_a_custom_page: {
       description: "Get a custom page",
       arguments: z.object({
@@ -5198,6 +6103,7 @@ export const model = {
       arguments: z.object({
         custom_page_id: z.string(),
         app_count: z.unknown().optional(),
+        contract_version: z.unknown().optional(),
         created_at: z.unknown().optional(),
         custom_html: z.string().describe("Custom page HTML."),
         name: z.unknown(),
@@ -5670,12 +6576,21 @@ export const model = {
           { "each": true },
           { "k": "scim_config" },
           { "k": "secret" },
+        ], [{ "each": true }, { "k": "config", "when": ["type", "duo"] }, {
+          "k": "client_secret",
+        }], [
+          { "each": true },
+          { "k": "scim_config", "when": ["type", "duo"] },
+          { "k": "secret" },
         ], [{ "each": true }, {
           "k": "scim_config",
           "when": ["type", "onetimepin"],
         }, { "k": "secret" }], [{ "each": true }, {
           "k": "scim_config",
           "when": ["type", "cloudflare"],
+        }, { "k": "secret" }], [{ "each": true }, {
+          "k": "scim_config",
+          "when": ["type", "passkeys"],
         }, { "k": "secret" }]]);
         const handle = await context.writeResource(
           "access_identity_providers",
@@ -5951,6 +6866,74 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    get_scim_group_resource: {
+      description: "Get a SCIM Group resource",
+      arguments: z.object({
+        identity_provider_id: z.string(),
+        group_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/groups/${args.group_id}`,
+        );
+
+        const handle = await context.writeResource(
+          "scim_group_resource",
+          sanitizeInstanceName(String(args.group_id)),
+          result,
+        );
+        context.logger.info("Fetched scim_group_resource", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_scim_group_resource: {
+      description: "Delete a SCIM Group resource",
+      arguments: z.object({
+        identity_provider_id: z.string(),
+        group_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/groups/${args.group_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.group_id });
+        return { dataHandles: [] };
+      },
+    },
     list_scim_user_resources: {
       description: "List SCIM User resources",
       arguments: z.object({
@@ -6019,6 +7002,74 @@ export const model = {
           count: results.length,
         });
         return { dataHandles: [handle] };
+      },
+    },
+    get_scim_user_resource: {
+      description: "Get a SCIM User resource",
+      arguments: z.object({
+        identity_provider_id: z.string(),
+        user_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/users/${args.user_id}`,
+        );
+
+        const handle = await context.writeResource(
+          "scim_user_resource",
+          sanitizeInstanceName(String(args.user_id)),
+          result,
+        );
+        context.logger.info("Fetched scim_user_resource", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_scim_user_resource: {
+      description: "Delete a SCIM User resource",
+      arguments: z.object({
+        identity_provider_id: z.string(),
+        user_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/users/${args.user_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.user_id });
+        return { dataHandles: [] };
       },
     },
     create: {
@@ -6463,19 +7514,23 @@ export const model = {
       description: "Create your Zero Trust organization",
       arguments: z.object({
         allow_authenticate_via_warp: z.unknown().optional(),
-        auth_domain: z.unknown(),
+        auth_domain: z.unknown().optional(),
         auto_redirect_to_identity: z.unknown().optional(),
         deny_unmatched_requests: z.unknown().optional(),
         deny_unmatched_requests_exempted_zone_names: z.unknown().optional(),
+        disable_end_user_app_creation: z.unknown().optional(),
         is_ui_read_only: z.unknown().optional(),
         login_design: z.unknown().optional(),
         mfa_config: z.unknown().optional(),
         mfa_piv_key_requirements: z.unknown().optional(),
         mfa_required_for_all_apps: z.unknown().optional(),
-        name: z.unknown(),
+        name: z.unknown().optional(),
+        service_token_inactivity: z.unknown().optional(),
         session_duration: z.unknown().optional(),
+        strict_service_token_auth: z.unknown().optional(),
         ui_read_only_toggle_reason: z.unknown().optional(),
         user_seat_expiration_inactive_time: z.unknown().optional(),
+        warp_auth_non_browser_401: z.unknown().optional(),
         warp_auth_session_duration: z.unknown().optional(),
       }),
       execute: async (
@@ -6533,15 +7588,19 @@ export const model = {
         custom_pages: z.unknown().optional(),
         deny_unmatched_requests: z.unknown().optional(),
         deny_unmatched_requests_exempted_zone_names: z.unknown().optional(),
+        disable_end_user_app_creation: z.unknown().optional(),
         is_ui_read_only: z.unknown().optional(),
         login_design: z.unknown().optional(),
         mfa_config: z.unknown().optional(),
         mfa_piv_key_requirements: z.unknown().optional(),
         mfa_required_for_all_apps: z.unknown().optional(),
         name: z.unknown().optional(),
+        service_token_inactivity: z.unknown().optional(),
         session_duration: z.unknown().optional(),
+        strict_service_token_auth: z.unknown().optional(),
         ui_read_only_toggle_reason: z.unknown().optional(),
         user_seat_expiration_inactive_time: z.unknown().optional(),
+        warp_auth_non_browser_401: z.unknown().optional(),
         warp_auth_session_duration: z.unknown().optional(),
       }),
       execute: async (
@@ -6575,6 +7634,64 @@ export const model = {
           result,
         );
         context.logger.info("Updated your_zero_trust_organization", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    patch_your_zero_trust_organization: {
+      description: "Partially update your Zero Trust organization",
+      arguments: z.object({
+        allow_authenticate_via_warp: z.unknown().optional(),
+        auth_domain: z.unknown().optional(),
+        auto_redirect_to_identity: z.unknown().optional(),
+        custom_pages: z.unknown().optional(),
+        deny_unmatched_requests: z.unknown().optional(),
+        deny_unmatched_requests_exempted_zone_names: z.unknown().optional(),
+        disable_end_user_app_creation: z.unknown().optional(),
+        is_ui_read_only: z.unknown().optional(),
+        login_design: z.unknown().optional(),
+        mfa_config: z.unknown().optional(),
+        mfa_piv_key_requirements: z.unknown().optional(),
+        mfa_required_for_all_apps: z.unknown().optional(),
+        name: z.unknown().optional(),
+        service_token_inactivity: z.unknown().optional(),
+        session_duration: z.unknown().optional(),
+        strict_service_token_auth: z.unknown().optional(),
+        ui_read_only_toggle_reason: z.unknown().optional(),
+        user_seat_expiration_inactive_time: z.unknown().optional(),
+        warp_auth_non_browser_401: z.unknown().optional(),
+        warp_auth_session_duration: z.unknown().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/access/organizations`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "patch_your_zero_trust_organization",
+          "updated",
+          result,
+        );
+        context.logger.info("Updated patch_your_zero_trust_organization", {});
         return { dataHandles: [handle] };
       },
     },
@@ -6731,6 +7848,151 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    get_trust_settings: {
+      description: "Get Zero Trust organization trust settings",
+      arguments: z.object({}),
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/organizations/trust_settings`,
+        );
+
+        const handle = await context.writeResource(
+          "trust_settings",
+          "trust_settings-current",
+          result,
+        );
+        context.logger.info("Fetched trust_settings", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_zero_trust_organization_replace_trust_settings: {
+      description: "Replace Zero Trust organization trust settings",
+      arguments: z.object({
+        grant_trust_to_all_accounts_in_org: z.unknown(),
+        trusting_accounts: z.unknown().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/organizations/trust_settings`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "zero_trust_organization_replace_trust_settings",
+          "updated",
+          result,
+        );
+        context.logger.info(
+          "Updated zero_trust_organization_replace_trust_settings",
+          {},
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    update_trust_settings: {
+      description: "Update Zero Trust organization trust settings",
+      arguments: z.object({
+        grant_trust_to_all_accounts_in_org: z.unknown().optional(),
+        trusting_accounts: z.unknown().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/access/organizations/trust_settings`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "trust_settings",
+          "updated",
+          result,
+        );
+        context.logger.info("Updated trust_settings", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_trust_settings: {
+      description: "Delete Zero Trust organization trust settings",
+      arguments: z.object({}),
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/organizations/trust_settings`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: "unknown" });
+        return { dataHandles: [] };
+      },
+    },
     list_access_reusable_policies: {
       description: "List Access reusable policies",
       arguments: z.object({
@@ -6798,6 +8060,7 @@ export const model = {
         exclude: z.unknown().optional(),
         include: z.unknown(),
         name: z.unknown(),
+        policy_resolution_account_id: z.unknown().optional(),
         require: z.unknown().optional(),
       }),
       execute: async (
@@ -6887,6 +8150,7 @@ export const model = {
         exclude: z.unknown().optional(),
         include: z.unknown(),
         name: z.unknown(),
+        policy_resolution_account_id: z.unknown().optional(),
         require: z.unknown().optional(),
       }),
       execute: async (
@@ -7345,8 +8609,10 @@ export const model = {
       arguments: z.object({
         client_secret_version: z.unknown().optional(),
         duration: z.unknown().optional(),
+        enabled: z.unknown().optional(),
         name: z.unknown(),
         previous_client_secret_expires_at: z.unknown().optional(),
+        tags: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7433,8 +8699,10 @@ export const model = {
         service_token_id: z.string(),
         client_secret_version: z.unknown().optional(),
         duration: z.unknown().optional(),
+        enabled: z.unknown().optional(),
         name: z.unknown().optional(),
         previous_client_secret_expires_at: z.unknown().optional(),
+        tags: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7810,6 +9078,491 @@ export const model = {
         return { dataHandles: [] };
       },
     },
+    list_user_populations: {
+      description: "List user populations",
+      arguments: z.object({
+        per_page: z.number().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/user_populations`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("user_populations", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} user_populations", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_user_population: {
+      description: "Create a user population",
+      arguments: z.object({
+        name: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/user_populations`,
+          body,
+        );
+
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
+        );
+        const handle = await context.writeResource(
+          "user_population",
+          id,
+          result,
+        );
+        context.logger.info("Created user_population {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_user_population: {
+      description: "Get a user population",
+      arguments: z.object({
+        user_population_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}`,
+        );
+
+        const handle = await context.writeResource(
+          "user_population",
+          sanitizeInstanceName(String(args.user_population_id)),
+          result,
+        );
+        context.logger.info("Fetched user_population", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_user_population: {
+      description: "Update a user population",
+      arguments: z.object({
+        user_population_id: z.string(),
+        name: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["user_population_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "user_population",
+          sanitizeInstanceName(String(args.user_population_id)),
+          result,
+        );
+        context.logger.info("Updated user_population", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_user_population: {
+      description: "Delete a user population",
+      arguments: z.object({
+        user_population_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", {
+          id: args.user_population_id,
+        });
+        return { dataHandles: [] };
+      },
+    },
+    list_users: {
+      description: "List users in a user population",
+      arguments: z.object({
+        user_population_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}/users`,
+        );
+
+        const handle = await context.writeResource(
+          "list_users",
+          sanitizeInstanceName(String(args.user_population_id)),
+          result,
+        );
+        context.logger.info("Fetched list_users", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    create_user: {
+      description: "Create a user population user",
+      arguments: z.object({
+        user_population_id: z.string(),
+        active: z.boolean().optional(),
+        displayName: z.string().optional(),
+        emails: z.array(z.unknown()).optional(),
+        externalId: z.string().optional(),
+        meta: z.unknown().optional(),
+        name: z.unknown().optional(),
+        schemas: z.array(z.string()).optional().describe(
+          "The SCIM schemas that apply to this resource.",
+        ),
+        userName: z.string().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["user_population_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}/users`,
+          body,
+        );
+
+        const created = result as { id?: unknown } | null | undefined;
+        const id = sanitizeInstanceName(
+          String(created?.id ?? String(args.user_population_id)),
+        );
+        const handle = await context.writeResource("user", id, result);
+        context.logger.info("Created user {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_user: {
+      description: "Get a user population user",
+      arguments: z.object({
+        user_population_id: z.string(),
+        user_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}/users/${args.user_id}`,
+        );
+
+        const handle = await context.writeResource(
+          "user",
+          sanitizeInstanceName(String(args.user_id)),
+          result,
+        );
+        context.logger.info("Fetched user", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_access_user_populations_replace_user: {
+      description: "Replace a user population user",
+      arguments: z.object({
+        user_population_id: z.string(),
+        user_id: z.string(),
+        active: z.boolean().optional(),
+        displayName: z.string().optional(),
+        emails: z.array(z.unknown()).optional(),
+        externalId: z.string().optional(),
+        meta: z.unknown().optional(),
+        name: z.unknown().optional(),
+        schemas: z.array(z.string()).optional().describe(
+          "The SCIM schemas that apply to this resource.",
+        ),
+        userName: z.string().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["user_population_id", "user_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}/users/${args.user_id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "access_user_populations_replace_user",
+          sanitizeInstanceName(String(args.user_id)),
+          result,
+        );
+        context.logger.info("Updated access_user_populations_replace_user", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_user: {
+      description: "Update a user population user",
+      arguments: z.object({
+        user_population_id: z.string(),
+        user_id: z.string(),
+        Operations: z.array(z.object({
+          op: z.enum(["add", "remove", "replace"]),
+          path: z.string().optional(),
+          value: z.union([
+            z.string().nullable(),
+            z.number(),
+            z.boolean(),
+            z.array(
+              z.union([z.string(), z.boolean(), z.number(), z.object({})]),
+            ),
+            z.record(z.string(), z.unknown()),
+          ]).optional(),
+        })),
+        schemas: z.array(z.string()).optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["user_population_id", "user_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}/users/${args.user_id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "user",
+          sanitizeInstanceName(String(args.user_id)),
+          result,
+        );
+        context.logger.info("Updated user", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_user: {
+      description: "Delete a user population user",
+      arguments: z.object({
+        user_population_id: z.string(),
+        user_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/user_populations/${args.user_population_id}/users/${args.user_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.user_id });
+        return { dataHandles: [] };
+      },
+    },
     get_users: {
       description: "Get users",
       arguments: z.object({
@@ -7866,169 +9619,6 @@ export const model = {
           count: results.length,
         });
         return { dataHandles: [handle] };
-      },
-    },
-    create_user: {
-      description: "Create a user",
-      arguments: z.object({
-        email: z.unknown(),
-        name: z.unknown().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/users`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const created = result as
-          | { id?: unknown; uid?: unknown }
-          | null
-          | undefined;
-        const id = sanitizeInstanceName(
-          String(
-            created?.id ?? created?.uid ??
-              await shortHash(JSON.stringify(requestKey)),
-          ),
-        );
-        const handle = await context.writeResource("user", id, result);
-        context.logger.info("Created user {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_user: {
-      description: "Get a user",
-      arguments: z.object({
-        user_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/users/${args.user_id}`,
-        );
-
-        const handle = await context.writeResource(
-          "user",
-          sanitizeInstanceName(String(args.user_id)),
-          result,
-        );
-        context.logger.info("Fetched user", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    update_user: {
-      description: "Update a user",
-      arguments: z.object({
-        user_id: z.string(),
-        email: z.unknown(),
-        name: z.unknown(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["user_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/users/${args.user_id}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "user",
-          sanitizeInstanceName(String(args.user_id)),
-          result,
-        );
-        context.logger.info("Updated user", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    delete_user: {
-      description: "Delete a user",
-      arguments: z.object({
-        user_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/users/${args.user_id}`,
-        );
-
-        context.logger.info("Deleted resource {id}", { id: args.user_id });
-        return { dataHandles: [] };
       },
     },
     get_active_sessions: {
@@ -8223,7 +9813,7 @@ export const model = {
       },
     },
     delete_mfa_authenticator: {
-      description: "Delete a user's MFA device",
+      description: "Delete a user's authenticator",
       arguments: z.object({
         user_id: z.string(),
         authenticator_id: z.string(),
@@ -8248,6 +9838,40 @@ export const model = {
           apiToken,
           "DELETE",
           `/accounts/${accountId}/access/users/${args.user_id}/mfa_authenticators/${args.authenticator_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", {
+          id: args.authenticator_id,
+        });
+        return { dataHandles: [] };
+      },
+    },
+    delete_passkey: {
+      description: "Delete a user's passkey",
+      arguments: z.object({
+        user_id: z.string(),
+        authenticator_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/users/${args.user_id}/passkeys/${args.authenticator_id}`,
         );
 
         context.logger.info("Deleted resource {id}", {

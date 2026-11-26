@@ -30,6 +30,9 @@ const GlobalArgsSchema = z.object({
 });
 
 const ListdnsprotectionrulesforaccountItemSchema = z.object({
+  block_any_queries: z.boolean().optional().describe(
+    "Whether to block DNS ANY queries. Defaults to true.",
+  ),
   burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
@@ -72,6 +75,9 @@ const ListdnsprotectionrulesforaccountSchema = z.object({
 });
 
 const CreatednsprotectionruleSchema = z.object({
+  block_any_queries: z.boolean().optional().describe(
+    "Whether to block DNS ANY queries. Defaults to true.",
+  ),
   burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
@@ -102,6 +108,9 @@ const CreatednsprotectionruleSchema = z.object({
 }).passthrough();
 
 const GetdnsprotectionruleSchema = z.object({
+  block_any_queries: z.boolean().optional().describe(
+    "Whether to block DNS ANY queries. Defaults to true.",
+  ),
   burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
@@ -132,6 +141,9 @@ const GetdnsprotectionruleSchema = z.object({
 }).passthrough();
 
 const UpdatednsprotectionruleSchema = z.object({
+  block_any_queries: z.boolean().optional().describe(
+    "Whether to block DNS ANY queries. Defaults to true.",
+  ),
   burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
@@ -881,11 +893,11 @@ const GetCf1SiteSchema = z.object({
 }).passthrough();
 
 const Cf1SiteRampsItemSchema = z.union([
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
+  z.object({}),
+  z.object({}),
+  z.object({}),
+  z.object({}),
+  z.object({}),
 ]);
 
 const ListCf1SiteRampsSchema = z.object({
@@ -901,11 +913,11 @@ const ListCf1SiteRampsSchema = z.object({
 });
 
 const GetCf1SiteRampSchema = z.union([
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
+  z.object({}),
+  z.object({}),
+  z.object({}),
+  z.object({}),
+  z.object({}),
 ]);
 
 const ListInterconnectsSchema = z.object({
@@ -927,18 +939,23 @@ const UpdateInterconnectSchema = z.object({
 }).passthrough();
 
 const ListItemSchema = z.object({
-  description: z.string().optional(),
-  destination_id: z.unknown().optional(),
-  destination_type: z.unknown().optional(),
-  errors: z.record(z.string(), z.unknown()).optional(),
+  activated: z.boolean().optional(),
+  device: z.unknown().optional(),
   id: z.unknown().optional(),
-  includes_discoveries_until: z.string().optional(),
-  last_attempted_update_at: z.string().optional(),
-  last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string().optional(),
-  name: z.string().optional(),
-  policy: z.string().optional(),
-  update_mode: z.unknown().optional(),
+  interrupt_window_days_of_week: z.array(z.unknown()).optional().describe(
+    "Allowed days of the week for upgrades. Default is all days.",
+  ),
+  interrupt_window_duration_hours: z.number().min(1).max(24).optional(),
+  interrupt_window_embargo_dates: z.array(z.unknown()).optional().describe(
+    "List of dates (YYYY-MM-DD) when upgrades are blocked.",
+  ),
+  interrupt_window_hour_of_day: z.number().optional(),
+  last_heartbeat: z.string().optional(),
+  last_seen_version: z.string().optional(),
+  last_updated: z.string().optional(),
+  license_key: z.string().optional(),
+  notes: z.string().optional(),
+  timezone: z.string().optional(),
 }).passthrough();
 
 const ListSchema = z.object({
@@ -954,164 +971,23 @@ const ListSchema = z.object({
 });
 
 const CreateSchema = z.object({
-  description: z.string().optional(),
-  destination_id: z.unknown().optional(),
-  destination_type: z.unknown().optional(),
-  errors: z.record(z.string(), z.unknown()).optional(),
+  activated: z.boolean().optional(),
+  device: z.unknown().optional(),
   id: z.unknown().optional(),
-  includes_discoveries_until: z.string().optional(),
-  last_attempted_update_at: z.string().optional(),
-  last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string().optional(),
-  name: z.string().optional(),
-  policy: z.string().optional(),
-  update_mode: z.unknown().optional(),
-}).passthrough();
-
-const GetCatalogSyncsReadSchema = z.object({
-  description: z.string().optional(),
-  destination_id: z.unknown().optional(),
-  destination_type: z.unknown().optional(),
-  errors: z.record(z.string(), z.unknown()).optional(),
-  id: z.unknown().optional(),
-  includes_discoveries_until: z.string().optional(),
-  last_attempted_update_at: z.string().optional(),
-  last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string().optional(),
-  name: z.string().optional(),
-  policy: z.string().optional(),
-  update_mode: z.unknown().optional(),
-}).passthrough();
-
-const UpdateSchema = z.object({
-  description: z.string().optional(),
-  destination_id: z.unknown().optional(),
-  destination_type: z.unknown().optional(),
-  errors: z.record(z.string(), z.unknown()).optional(),
-  id: z.unknown().optional(),
-  includes_discoveries_until: z.string().optional(),
-  last_attempted_update_at: z.string().optional(),
-  last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string().optional(),
-  name: z.string().optional(),
-  policy: z.string().optional(),
-  update_mode: z.unknown().optional(),
-}).passthrough();
-
-const PatchSchema = z.object({
-  description: z.string().optional(),
-  destination_id: z.unknown().optional(),
-  destination_type: z.unknown().optional(),
-  errors: z.record(z.string(), z.unknown()).optional(),
-  id: z.unknown().optional(),
-  includes_discoveries_until: z.string().optional(),
-  last_attempted_update_at: z.string().optional(),
-  last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string().optional(),
-  name: z.string().optional(),
-  policy: z.string().optional(),
-  update_mode: z.unknown().optional(),
-}).passthrough();
-
-const CatalogSyncsRefreshSchema = z.string();
-
-const GetOnrampsMwanAddrSpaceReadSchema = z.object({
-  prefixes: z.array(z.unknown()).optional(),
-}).passthrough();
-
-const GetOnrampsReadSchema = z.object({
-  attached_hubs: z.array(z.unknown()).optional(),
-  attached_vpcs: z.array(z.unknown()).optional(),
-  cloud_asn: z.number().int().optional(),
-  cloud_type: z.unknown().optional(),
-  description: z.string().optional(),
-  dynamic_routing: z.boolean().optional(),
-  hub: z.unknown().optional(),
-  id: z.unknown().optional(),
-  install_routes_in_cloud: z.boolean().optional(),
-  install_routes_in_magic_wan: z.boolean().optional(),
-  last_applied_at: z.string().optional(),
-  last_exported_at: z.string().optional(),
-  last_planned_at: z.string().optional(),
-  manage_hub_to_hub_attachments: z.boolean().optional(),
-  manage_vpc_to_hub_attachments: z.boolean().optional(),
-  name: z.string().optional(),
-  planned_monthly_cost_estimate: z.unknown().optional(),
-  planned_resources: z.array(z.unknown()).optional(),
-  planned_resources_unavailable: z.boolean().optional(),
-  post_apply_monthly_cost_estimate: z.unknown().optional(),
-  post_apply_resources: z.record(z.string(), z.unknown()).optional(),
-  post_apply_resources_unavailable: z.boolean().optional(),
-  region: z.string().optional(),
-  status: z.unknown().optional(),
-  type: z.unknown().optional(),
-  updated_at: z.string().optional(),
-  vpc: z.unknown().optional(),
-  vpcs_by_id: z.record(z.string(), z.unknown()).optional(),
-  vpcs_by_id_unavailable: z.array(z.unknown()).optional().describe(
-    "The list of vpc IDs for which resource details failed to generate.",
+  interrupt_window_days_of_week: z.array(z.unknown()).optional().describe(
+    "Allowed days of the week for upgrades. Default is all days.",
   ),
-}).passthrough();
-
-const GetProvidersReadSchema = z.object({
-  aws_arn: z.string().optional(),
-  azure_subscription_id: z.string().optional(),
-  azure_tenant_id: z.string().optional(),
-  cloud_type: z.unknown().optional(),
-  description: z.string().optional(),
-  friendly_name: z.string().optional(),
-  gcp_project_id: z.string().optional(),
-  gcp_service_account_email: z.string().optional(),
-  id: z.unknown().optional(),
+  interrupt_window_duration_hours: z.number().min(1).max(24).optional(),
+  interrupt_window_embargo_dates: z.array(z.unknown()).optional().describe(
+    "List of dates (YYYY-MM-DD) when upgrades are blocked.",
+  ),
+  interrupt_window_hour_of_day: z.number().optional(),
+  last_heartbeat: z.string().optional(),
+  last_seen_version: z.string().optional(),
   last_updated: z.string().optional(),
-  lifecycle_state: z.unknown().optional(),
-  state: z.unknown().optional(),
-  state_v2: z.unknown().optional(),
-  status: z.unknown().optional(),
-}).passthrough();
-
-const GetProvidersInitialSetupSchema = z.union([
-  z.object({
-    aws_trust_policy: z.string().optional(),
-    item_type: z.string().optional(),
-  }),
-  z.object({
-    azure_consent_url: z.string().optional(),
-    integration_identity_tag: z.string().optional(),
-    item_type: z.string().optional(),
-    tag_cli_command: z.string().optional(),
-  }),
-  z.object({
-    integration_identity_tag: z.string().optional(),
-    item_type: z.string().optional(),
-    tag_cli_command: z.string().optional(),
-  }),
-]);
-
-const CreateResourcesCatalogPolicyPreviewSchema = z.string();
-
-const GetResourcesCatalogReadSchema = z.object({
-  account_id: z.unknown().optional(),
-  cloud_type: z.unknown().optional(),
-  config: z.record(z.string(), z.unknown()).optional(),
-  deployment_provider: z.unknown().optional(),
-  id: z.unknown().optional(),
-  managed: z.boolean().optional(),
-  managed_by: z.array(z.unknown()).optional(),
-  monthly_cost_estimate: z.unknown().optional(),
-  name: z.string().optional(),
-  native_id: z.string().optional(),
-  observations: z.record(z.string(), z.unknown()).optional(),
-  provider_ids: z.array(z.unknown()).optional(),
-  provider_names_by_id: z.record(z.string(), z.string()).optional(),
-  region: z.string().optional(),
-  resource_group: z.string().optional(),
-  resource_type: z.unknown().optional(),
-  sections: z.array(z.unknown()).optional(),
-  state: z.record(z.string(), z.unknown()).optional(),
-  tags: z.record(z.string(), z.string()).optional(),
-  updated_at: z.string().optional(),
-  url: z.string().optional(),
+  license_key: z.string().optional(),
+  notes: z.string().optional(),
+  timezone: z.string().optional(),
 }).passthrough();
 
 const GetSchema = z.object({
@@ -1131,8 +1007,26 @@ const GetSchema = z.object({
   last_updated: z.string().optional(),
   license_key: z.string().optional(),
   notes: z.string().optional(),
-  primary: z.boolean().optional().default(true),
-  site_id: z.string().optional(),
+  timezone: z.string().optional(),
+}).passthrough();
+
+const UpdateSchema = z.object({
+  activated: z.boolean().optional(),
+  device: z.unknown().optional(),
+  id: z.unknown().optional(),
+  interrupt_window_days_of_week: z.array(z.unknown()).optional().describe(
+    "Allowed days of the week for upgrades. Default is all days.",
+  ),
+  interrupt_window_duration_hours: z.number().min(1).max(24).optional(),
+  interrupt_window_embargo_dates: z.array(z.unknown()).optional().describe(
+    "List of dates (YYYY-MM-DD) when upgrades are blocked.",
+  ),
+  interrupt_window_hour_of_day: z.number().optional(),
+  last_heartbeat: z.string().optional(),
+  last_seen_version: z.string().optional(),
+  last_updated: z.string().optional(),
+  license_key: z.string().optional(),
+  notes: z.string().optional(),
   timezone: z.string().optional(),
 }).passthrough();
 
@@ -1153,8 +1047,6 @@ const UpdateMconnConnectorsEditSchema = z.object({
   last_updated: z.string().optional(),
   license_key: z.string().optional(),
   notes: z.string().optional(),
-  primary: z.boolean().optional().default(true),
-  site_id: z.string().optional(),
   timezone: z.string().optional(),
 }).passthrough();
 
@@ -1463,6 +1355,7 @@ const LansItemSchema = z.object({
   name: z.string().optional(),
   nat: z.unknown().optional(),
   physport: z.unknown().optional(),
+  remote_subnets: z.array(z.unknown()).optional(),
   routed_subnets: z.array(z.unknown()).optional(),
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
@@ -1496,6 +1389,7 @@ const CreateLanSchema = z.object({
   name: z.string().optional(),
   nat: z.unknown().optional(),
   physport: z.unknown().optional(),
+  remote_subnets: z.array(z.unknown()).optional(),
   routed_subnets: z.array(z.unknown()).optional(),
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
@@ -1517,6 +1411,7 @@ const GetMagicSiteLansLanDetailsSchema = z.object({
   name: z.string().optional(),
   nat: z.unknown().optional(),
   physport: z.unknown().optional(),
+  remote_subnets: z.array(z.unknown()).optional(),
   routed_subnets: z.array(z.unknown()).optional(),
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
@@ -1538,6 +1433,7 @@ const PatchLanSchema = z.object({
   name: z.string().optional(),
   nat: z.unknown().optional(),
   physport: z.unknown().optional(),
+  remote_subnets: z.array(z.unknown()).optional(),
   routed_subnets: z.array(z.unknown()).optional(),
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
@@ -1604,11 +1500,20 @@ const WansItemSchema = z.object({
       "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
     ),
   id: z.unknown().optional(),
+  load_balance_inner_flows: z.boolean().optional(),
   name: z.string().optional(),
   physport: z.unknown().optional(),
   priority: z.number().int().optional().describe(
     "Priority of WAN for traffic loadbalancing.",
   ),
+  provisioned_download_kbps: z.number().int().min(1).max(1000000000).optional()
+    .describe(
+      "Provisioned download rate of the WAN circuit in kilobits per second.",
+    ),
+  provisioned_upload_kbps: z.number().int().min(1).max(1000000000).optional()
+    .describe(
+      "Provisioned upload rate of the WAN circuit in kilobits per second.",
+    ),
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
@@ -1632,11 +1537,20 @@ const CreateWanSchema = z.object({
       "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
     ),
   id: z.unknown().optional(),
+  load_balance_inner_flows: z.boolean().optional(),
   name: z.string().optional(),
   physport: z.unknown().optional(),
   priority: z.number().int().optional().describe(
     "Priority of WAN for traffic loadbalancing.",
   ),
+  provisioned_download_kbps: z.number().int().min(1).max(1000000000).optional()
+    .describe(
+      "Provisioned download rate of the WAN circuit in kilobits per second.",
+    ),
+  provisioned_upload_kbps: z.number().int().min(1).max(1000000000).optional()
+    .describe(
+      "Provisioned upload rate of the WAN circuit in kilobits per second.",
+    ),
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
@@ -1648,11 +1562,20 @@ const GetMagicSiteWansWanDetailsSchema = z.object({
       "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
     ),
   id: z.unknown().optional(),
+  load_balance_inner_flows: z.boolean().optional(),
   name: z.string().optional(),
   physport: z.unknown().optional(),
   priority: z.number().int().optional().describe(
     "Priority of WAN for traffic loadbalancing.",
   ),
+  provisioned_download_kbps: z.number().int().min(1).max(1000000000).optional()
+    .describe(
+      "Provisioned download rate of the WAN circuit in kilobits per second.",
+    ),
+  provisioned_upload_kbps: z.number().int().min(1).max(1000000000).optional()
+    .describe(
+      "Provisioned upload rate of the WAN circuit in kilobits per second.",
+    ),
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
@@ -1664,11 +1587,20 @@ const PatchWanSchema = z.object({
       "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
     ),
   id: z.unknown().optional(),
+  load_balance_inner_flows: z.boolean().optional(),
   name: z.string().optional(),
   physport: z.unknown().optional(),
   priority: z.number().int().optional().describe(
     "Priority of WAN for traffic loadbalancing.",
   ),
+  provisioned_download_kbps: z.number().int().min(1).max(1000000000).optional()
+    .describe(
+      "Provisioned download rate of the WAN circuit in kilobits per second.",
+    ),
+  provisioned_upload_kbps: z.number().int().min(1).max(1000000000).optional()
+    .describe(
+      "Provisioned upload rate of the WAN circuit in kilobits per second.",
+    ),
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
@@ -1681,7 +1613,7 @@ const PatchWanSchema = z.object({
 /** Cloudflare Magic Transit — GRE tunnels, static routes, health checks, IPsec */
 export const model = {
   type: "@webframp/cloudflare/magic-transit",
-  version: "2026.11.05.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1759,6 +1691,12 @@ export const model = {
     },
     {
       toVersion: "2026.11.05.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.26.1",
       description:
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
@@ -2043,80 +1981,26 @@ export const model = {
       garbageCollection: 20,
     },
     "list": {
-      description: "List Catalog Syncs",
+      description: "List Connectors",
       schema: ListSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     "create": {
-      description: "Create Catalog Sync",
+      description: "Create Connector",
       schema: CreateSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "catalog_syncs_read": {
-      description: "Read Catalog Sync",
-      schema: GetCatalogSyncsReadSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "update": {
-      description: "Update Catalog Sync",
-      schema: UpdateSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "patch": {
-      description: "Patch Catalog Sync",
-      schema: PatchSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "catalog_syncs_refresh": {
-      description: "Run Catalog Sync",
-      schema: CatalogSyncsRefreshSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "onramps_mwan_addr_space_read": {
-      description: "Read Magic WAN Address Space",
-      schema: GetOnrampsMwanAddrSpaceReadSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "onramps_read": {
-      description: "Read On-ramp",
-      schema: GetOnrampsReadSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "providers_read": {
-      description: "Read Cloud Integration",
-      schema: GetProvidersReadSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "providers_initial_setup": {
-      description: "Get Cloud Integration Setup Config",
-      schema: GetProvidersInitialSetupSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "resources_catalog_policy_preview": {
-      description: "Preview Rego Query",
-      schema: CreateResourcesCatalogPolicyPreviewSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "resources_catalog_read": {
-      description: "Read Resource",
-      schema: GetResourcesCatalogReadSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "get": {
       description: "Get Connector",
       schema: GetSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "update": {
+      description: "Update Connector",
+      schema: UpdateSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -2455,6 +2339,9 @@ export const model = {
     creatednsprotectionrule: {
       description: "Create DNS Protection rule.",
       arguments: z.object({
+        block_any_queries: z.boolean().optional().describe(
+          "Whether to block DNS ANY queries. Optional. Defaults to true.",
+        ),
         burst_sensitivity: z.string().describe(
           "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
         ),
@@ -2587,6 +2474,9 @@ export const model = {
       arguments: z.object({
         rule_id: z.string().describe(
           "The UUID of the DNS Protection rule to update.",
+        ),
+        block_any_queries: z.boolean().optional().describe(
+          "The new value for whether to block DNS ANY queries. Optional.",
         ),
         burst_sensitivity: z.string().optional().describe(
           "The new burst sensitivity. Optional. Must be one of 'low', 'medium', 'high'.",
@@ -5469,6 +5359,7 @@ export const model = {
       arguments: z.object({
         cf_interconnect_id: z.string(),
         automatic_return_routing: z.unknown().optional(),
+        bgp: z.unknown().optional(),
         description: z.unknown().optional(),
         gre: z.unknown().optional(),
         health_check: z.unknown().optional(),
@@ -5516,8 +5407,12 @@ export const model = {
       },
     },
     list: {
-      description: "List Catalog Syncs",
-      arguments: z.object({}),
+      description: "List Connectors",
+      arguments: z.object({
+        device_type: z.enum(["MANAGED", "LICENSED"]).optional().describe(
+          "Filter connectors by device type.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -5544,7 +5439,7 @@ export const model = {
           Record<string, unknown>
         >(
           apiToken,
-          `/accounts/${accountId}/magic/cloud/catalog-syncs`,
+          `/accounts/${accountId}/magic/connectors`,
           params,
         );
 
@@ -5568,13 +5463,19 @@ export const model = {
       },
     },
     create: {
-      description: "Create Catalog Sync",
+      description: "Create Connector",
       arguments: z.object({
-        description: z.string().optional(),
-        destination_type: z.unknown(),
-        name: z.string(),
-        policy: z.string().optional(),
-        update_mode: z.unknown(),
+        device: z.unknown(),
+        activated: z.boolean().optional(),
+        interrupt_window_days_of_week: z.array(z.unknown()).optional().describe(
+          "Allowed days of the week for upgrades. Default is all days.",
+        ),
+        interrupt_window_duration_hours: z.number().min(1).max(24).optional(),
+        interrupt_window_embargo_dates: z.array(z.unknown()).optional()
+          .describe("List of dates (YYYY-MM-DD) when upgrades are blocked."),
+        interrupt_window_hour_of_day: z.number().optional(),
+        notes: z.string().optional(),
+        timezone: z.string().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5597,7 +5498,7 @@ export const model = {
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/magic/cloud/catalog-syncs`,
+          `/accounts/${accountId}/magic/connectors`,
           body,
         );
 
@@ -5613,571 +5514,6 @@ export const model = {
         );
         const handle = await context.writeResource("create", id, result);
         context.logger.info("Created create {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_catalog_syncs_read: {
-      description: "Read Catalog Sync",
-      arguments: z.object({
-        sync_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/magic/cloud/catalog-syncs/${args.sync_id}`,
-        );
-
-        const handle = await context.writeResource(
-          "catalog_syncs_read",
-          sanitizeInstanceName(String(args.sync_id)),
-          result,
-        );
-        context.logger.info("Fetched catalog_syncs_read", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    update: {
-      description: "Update Catalog Sync",
-      arguments: z.object({
-        sync_id: z.string(),
-        description: z.string().optional(),
-        name: z.string().optional(),
-        policy: z.string().optional(),
-        update_mode: z.unknown().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["sync_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/magic/cloud/catalog-syncs/${args.sync_id}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "update",
-          sanitizeInstanceName(String(args.sync_id)),
-          result,
-        );
-        context.logger.info("Updated update", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    patch: {
-      description: "Patch Catalog Sync",
-      arguments: z.object({
-        sync_id: z.string(),
-        description: z.string().optional(),
-        name: z.string().optional(),
-        policy: z.string().optional(),
-        update_mode: z.unknown().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["sync_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/accounts/${accountId}/magic/cloud/catalog-syncs/${args.sync_id}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "patch",
-          sanitizeInstanceName(String(args.sync_id)),
-          result,
-        );
-        context.logger.info("Updated patch", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    delete: {
-      description: "Delete Catalog Sync",
-      arguments: z.object({
-        sync_id: z.string(),
-        delete_destination: z.boolean().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["delete_destination"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/magic/cloud/catalog-syncs/${args.sync_id}${qs}`,
-        );
-
-        context.logger.info("Deleted resource {id}", { id: args.sync_id });
-        return { dataHandles: [] };
-      },
-    },
-    catalog_syncs_refresh: {
-      description: "Run Catalog Sync",
-      arguments: z.object({
-        sync_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/magic/cloud/catalog-syncs/${args.sync_id}/refresh`,
-        );
-
-        const handle = await context.writeResource(
-          "catalog_syncs_refresh",
-          "catalog_syncs_refresh-current",
-          result ?? {},
-        );
-        context.logger.info("Executed catalog_syncs_refresh", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_onramps_mwan_addr_space_read: {
-      description: "Read Magic WAN Address Space",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/magic/cloud/onramps/magic_wan_address_space`,
-        );
-
-        const handle = await context.writeResource(
-          "onramps_mwan_addr_space_read",
-          "onramps_mwan_addr_space_read-current",
-          result,
-        );
-        context.logger.info("Fetched onramps_mwan_addr_space_read", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_onramps_read: {
-      description: "Read On-ramp",
-      arguments: z.object({
-        onramp_id: z.string(),
-        status: z.boolean().optional(),
-        vpcs: z.boolean().optional(),
-        post_apply_resources: z.boolean().optional(),
-        planned_resources: z.boolean().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/magic/cloud/onramps/${args.onramp_id}`,
-        );
-
-        const handle = await context.writeResource(
-          "onramps_read",
-          sanitizeInstanceName(String(args.onramp_id)),
-          result,
-        );
-        context.logger.info("Fetched onramps_read", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    onramps_apply: {
-      description: "Apply On-ramp",
-      arguments: z.object({
-        onramp_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/magic/cloud/onramps/${args.onramp_id}/apply`,
-        );
-
-        context.logger.info("Executed onramps_apply", {});
-        return { dataHandles: [] };
-      },
-    },
-    onramps_plan: {
-      description: "Plan On-ramp",
-      arguments: z.object({
-        onramp_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/magic/cloud/onramps/${args.onramp_id}/plan`,
-        );
-
-        context.logger.info("Executed onramps_plan", {});
-        return { dataHandles: [] };
-      },
-    },
-    providers_discover_all: {
-      description: "Run Discovery for All Integrations",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/magic/cloud/providers/discover`,
-        );
-
-        context.logger.info("Executed providers_discover_all", {});
-        return { dataHandles: [] };
-      },
-    },
-    get_providers_read: {
-      description: "Read Cloud Integration",
-      arguments: z.object({
-        provider_id: z.string(),
-        status: z.boolean().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/magic/cloud/providers/${args.provider_id}`,
-        );
-
-        const handle = await context.writeResource(
-          "providers_read",
-          sanitizeInstanceName(String(args.provider_id)),
-          result,
-        );
-        context.logger.info("Fetched providers_read", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    providers_discover: {
-      description: "Run Discovery",
-      arguments: z.object({
-        provider_id: z.string(),
-        v2: z.boolean().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["v2"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        await cfApi(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/magic/cloud/providers/${args.provider_id}/discover${qs}`,
-        );
-
-        context.logger.info("Executed providers_discover", {});
-        return { dataHandles: [] };
-      },
-    },
-    get_providers_initial_setup: {
-      description: "Get Cloud Integration Setup Config",
-      arguments: z.object({
-        provider_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/magic/cloud/providers/${args.provider_id}/initial_setup`,
-        );
-
-        const handle = await context.writeResource(
-          "providers_initial_setup",
-          sanitizeInstanceName(String(args.provider_id)),
-          result,
-        );
-        context.logger.info("Fetched providers_initial_setup", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    create_resources_catalog_policy_preview: {
-      description: "Preview Rego Query",
-      arguments: z.object({
-        policy: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body = args;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/magic/cloud/resources/policy-preview`,
-          body,
-        );
-
-        // No id in the response and no path parameter to key on: name the
-        // instance by a hash of the request, leaving out secret arguments.
-        const secretArgs = new Set<string>([]);
-        const requestKey = Object.entries(args)
-          .filter(([k]) => !secretArgs.has(k))
-          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const id = sanitizeInstanceName(
-          await shortHash(JSON.stringify(requestKey)),
-        );
-        const handle = await context.writeResource(
-          "resources_catalog_policy_preview",
-          id,
-          result,
-        );
-        context.logger.info("Created resources_catalog_policy_preview {id}", {
-          id,
-        });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_resources_catalog_read: {
-      description: "Read Resource",
-      arguments: z.object({
-        resource_id: z.string(),
-        v2: z.boolean().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/magic/cloud/resources/${args.resource_id}`,
-        );
-
-        const handle = await context.writeResource(
-          "resources_catalog_read",
-          sanitizeInstanceName(String(args.resource_id)),
-          result,
-        );
-        context.logger.info("Fetched resources_catalog_read", {});
         return { dataHandles: [handle] };
       },
     },
@@ -6216,6 +5552,62 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    update: {
+      description: "Update Connector",
+      arguments: z.object({
+        connector_id: z.string(),
+        activated: z.boolean().optional(),
+        interrupt_window_days_of_week: z.array(z.unknown()).optional().describe(
+          "Allowed days of the week for upgrades. Default is all days.",
+        ),
+        interrupt_window_duration_hours: z.number().min(1).max(24).optional(),
+        interrupt_window_embargo_dates: z.array(z.unknown()).optional()
+          .describe("List of dates (YYYY-MM-DD) when upgrades are blocked."),
+        interrupt_window_hour_of_day: z.number().optional(),
+        notes: z.string().optional(),
+        timezone: z.string().optional(),
+        provision_license: z.boolean().optional().describe(
+          "When true, regenerate license key for the connector.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["connector_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/magic/connectors/${args.connector_id}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "update",
+          sanitizeInstanceName(String(args.connector_id)),
+          result,
+        );
+        context.logger.info("Updated update", {});
+        return { dataHandles: [handle] };
+      },
+    },
     update_mconn_connectors_edit: {
       description: "Edit Connector",
       arguments: z.object({
@@ -6229,8 +5621,6 @@ export const model = {
           .describe("List of dates (YYYY-MM-DD) when upgrades are blocked."),
         interrupt_window_hour_of_day: z.number().optional(),
         notes: z.string().optional(),
-        primary: z.boolean().optional(),
-        site_id: z.string().optional(),
         timezone: z.string().optional(),
         provision_license: z.boolean().optional().describe(
           "When true, regenerate license key for the connector.",
@@ -6272,6 +5662,37 @@ export const model = {
         );
         context.logger.info("Updated mconn_connectors_edit", {});
         return { dataHandles: [handle] };
+      },
+    },
+    delete: {
+      description: "Delete Connector",
+      arguments: z.object({
+        connector_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/magic/connectors/${args.connector_id}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.connector_id });
+        return { dataHandles: [] };
       },
     },
     list_gre_tunnels: {
@@ -7512,6 +6933,9 @@ export const model = {
         site_id: z.string(),
         connector_id: z.unknown().optional(),
         description: z.string().optional(),
+        ha_mode: z.boolean().optional().describe(
+          "Site high availability mode. If set to true, the site can have two connectors...",
+        ),
         location: z.unknown().optional(),
         name: z.unknown().optional(),
         secondary_connector_id: z.unknown().optional(),
@@ -7560,6 +6984,9 @@ export const model = {
         site_id: z.string(),
         connector_id: z.unknown().optional(),
         description: z.string().optional(),
+        ha_mode: z.boolean().optional().describe(
+          "Site high availability mode. If set to true, the site can have two connectors...",
+        ),
         location: z.unknown().optional(),
         name: z.unknown().optional(),
         secondary_connector_id: z.unknown().optional(),
@@ -8219,6 +7646,7 @@ export const model = {
         name: z.string().optional(),
         nat: z.unknown().optional(),
         physport: z.unknown().optional(),
+        remote_subnets: z.array(z.unknown()).optional(),
         routed_subnets: z.array(z.unknown()).optional(),
         static_addressing: z.unknown().optional(),
         vlan_tag: z.unknown().optional(),
@@ -8303,6 +7731,9 @@ export const model = {
         site_id: z.string(),
         lan_id: z.string(),
         bond_id: z.unknown().optional(),
+        ha_link: z.boolean().optional().describe(
+          "mark true to use this LAN for HA probing. only works for site with HA turned ...",
+        ),
         is_breakout: z.boolean().optional().describe(
           "mark true to use this LAN for source-based breakout traffic",
         ),
@@ -8312,6 +7743,7 @@ export const model = {
         name: z.string().optional(),
         nat: z.unknown().optional(),
         physport: z.unknown().optional(),
+        remote_subnets: z.array(z.unknown()).optional(),
         routed_subnets: z.array(z.unknown()).optional(),
         static_addressing: z.unknown().optional(),
         vlan_tag: z.unknown().optional(),
@@ -8360,6 +7792,9 @@ export const model = {
         site_id: z.string(),
         lan_id: z.string(),
         bond_id: z.unknown().optional(),
+        ha_link: z.boolean().optional().describe(
+          "mark true to use this LAN for HA probing. only works for site with HA turned ...",
+        ),
         is_breakout: z.boolean().optional().describe(
           "mark true to use this LAN for source-based breakout traffic",
         ),
@@ -8369,6 +7804,7 @@ export const model = {
         name: z.string().optional(),
         nat: z.unknown().optional(),
         physport: z.unknown().optional(),
+        remote_subnets: z.array(z.unknown()).optional(),
         routed_subnets: z.array(z.unknown()).optional(),
         static_addressing: z.unknown().optional(),
         vlan_tag: z.unknown().optional(),
@@ -8745,9 +8181,21 @@ export const model = {
       description: "Create a new Site WAN",
       arguments: z.object({
         site_id: z.string(),
+        health_check_rate: z.enum(["low", "mid", "high"]).optional().describe(
+          "Magic WAN health check rate for tunnels created on this link. The default val...",
+        ),
+        load_balance_inner_flows: z.boolean().optional(),
         name: z.string().optional(),
         physport: z.unknown(),
         priority: z.number().int().optional(),
+        provisioned_download_kbps: z.number().int().min(1).max(1000000000)
+          .optional().describe(
+            "Provisioned download rate of the WAN circuit in kilobits per second.",
+          ),
+        provisioned_upload_kbps: z.number().int().min(1).max(1000000000)
+          .optional().describe(
+            "Provisioned upload rate of the WAN circuit in kilobits per second.",
+          ),
         static_addressing: z.unknown().optional(),
         vlan_tag: z.unknown().optional(),
       }),
@@ -8830,9 +8278,21 @@ export const model = {
       arguments: z.object({
         site_id: z.string(),
         wan_id: z.string(),
+        health_check_rate: z.enum(["low", "mid", "high"]).optional().describe(
+          "Magic WAN health check rate for tunnels created on this link.",
+        ),
+        load_balance_inner_flows: z.boolean().nullable().optional(),
         name: z.string().optional(),
         physport: z.unknown().optional(),
         priority: z.number().int().optional(),
+        provisioned_download_kbps: z.number().int().min(1).max(1000000000)
+          .nullable().optional().describe(
+            "Provisioned download rate of the WAN circuit in kilobits per second. Set to n...",
+          ),
+        provisioned_upload_kbps: z.number().int().min(1).max(1000000000)
+          .nullable().optional().describe(
+            "Provisioned upload rate of the WAN circuit in kilobits per second. Set to nul...",
+          ),
         static_addressing: z.unknown().optional(),
         vlan_tag: z.unknown().optional(),
       }),
@@ -8879,9 +8339,21 @@ export const model = {
       arguments: z.object({
         site_id: z.string(),
         wan_id: z.string(),
+        health_check_rate: z.enum(["low", "mid", "high"]).optional().describe(
+          "Magic WAN health check rate for tunnels created on this link.",
+        ),
+        load_balance_inner_flows: z.boolean().nullable().optional(),
         name: z.string().optional(),
         physport: z.unknown().optional(),
         priority: z.number().int().optional(),
+        provisioned_download_kbps: z.number().int().min(1).max(1000000000)
+          .nullable().optional().describe(
+            "Provisioned download rate of the WAN circuit in kilobits per second. Set to n...",
+          ),
+        provisioned_upload_kbps: z.number().int().min(1).max(1000000000)
+          .nullable().optional().describe(
+            "Provisioned upload rate of the WAN circuit in kilobits per second. Set to nul...",
+          ),
         static_addressing: z.unknown().optional(),
         vlan_tag: z.unknown().optional(),
       }),
