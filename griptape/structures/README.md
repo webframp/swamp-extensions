@@ -32,7 +32,6 @@ argument overrides `GT_CLOUD_BASE_URL` and the built-in default
 
 These method arguments carry a credential:
 
-- `create_structure_deployment`: `code_source`
 - `get_invoke_structure_webhook_get`: `api_key`
 - `invoke_structure_webhook_post`: `api_key`
 
@@ -44,9 +43,6 @@ value is recorded in cleartext.
 swamp model method run gt-structures get_invoke_structure_webhook_get \
   --input 'api_key=${{ vault.get("griptape", "<KEY>") }}'
 ```
-
-`code_source` is an object that holds the credential in one of its fields. Put
-the `vault.get` expression on that field, not the literal value.
 
 ## Methods
 

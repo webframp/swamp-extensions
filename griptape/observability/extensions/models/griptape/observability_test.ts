@@ -356,7 +356,6 @@ Deno.test({
       "status": null,
       "status_detail": null,
       "structure_id": "test-value",
-      "tool_id": "test-value",
     };
     await withMockApi({
       "GET /api/deployments/test-id-123": { json: fixture },

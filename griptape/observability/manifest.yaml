@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/griptape/observability"
 license: Apache-2.0
-version: "2026.11.07.1"
+version: "2026.11.26.1"
 description: "Griptape Cloud Observability — dashboards, platform config, events, and deployments"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

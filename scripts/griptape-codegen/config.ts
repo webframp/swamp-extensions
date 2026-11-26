@@ -24,7 +24,7 @@ export const SCHEMA_URL =
  * re-fetches, prints the old/new hash, and rewrites this constant.
  */
 export const SPEC_SHA256 =
-  "f06100fe330a59a7c052b5978fdf55f93e3ab5887cfecf1feddb7e76114a0032";
+  "df7fd091ba043fede98f18e68dd0fe7829447d2a62ef4e3d099b5d345febdded";
 
 /** Where generated extensions land, relative to the codegen dir (cwd). */
 export const OUTPUT_BASE = "../../griptape";
@@ -175,10 +175,9 @@ export const SERVICES: ServiceConfig[] = [
   },
   {
     name: "integrations",
-    description:
-      "Griptape Cloud Integrations — integrations and their outbound connections",
-    pathPrefixes: ["/api/integrations", "/api/connections"],
-    labels: ["griptape", "integrations", "connections"],
+    description: "Griptape Cloud Integrations — integrations",
+    pathPrefixes: ["/api/integrations"],
+    labels: ["griptape", "integrations"],
   },
   {
     name: "tags",

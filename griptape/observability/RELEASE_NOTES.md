@@ -1,4 +1,7 @@
-## 2026.11.07.1
+## 2026.11.26.1
 
-**Added:** Initial code-generated release of @webframp/griptape/observability
-with 4 methods covering the Griptape Cloud observability API surface.
+**Changed:** A response schema no longer declares the `tool_id` field, which the
+current Griptape OpenAPI spec dropped. Regenerated from that spec.
+
+**Upgrade note:** Methods and arguments are unchanged. Previously stored data
+that carries `tool_id` still validates because response schemas are loose.

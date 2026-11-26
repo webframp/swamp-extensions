@@ -110,28 +110,36 @@ const ListTagsSchema = z.object({
 /** Griptape Cloud Tags — tag profiles and tag listings */
 export const model = {
   type: "@webframp/griptape/tags",
-  version: "2026.11.07.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; global arguments keep their shape, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "tag_profiles": {
-      description: "list operation",
+      description:
+        "The organization's tag profiles. Open on every plan, including those without usage auditing.",
       schema: ListTagProfilesSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     "tag_profile": {
       description:
-        "Describe a recorded tag value. A value has at most one profile, so profiling it again is a 409.",
+        "Describe a recorded tag value. A value has at most one profile, so profiling it again is a 409. Only for organizations whose `can_audit_usage` is true; others get 403.",
       schema: CreateTagProfileSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "tags": {
       description:
-        "The distinct tags reported for one key in a window, one per value, most recently seen first. `matched=false` lists the tags no enabled budget covers.",
+        "The distinct tags reported for one key in a window, one per value, most recently seen first. `matched=false` lists the tags no enabled budget covers. Only for organizations whose `can_audit_usage` is true; others get 403.",
       schema: ListTagsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
@@ -140,7 +148,8 @@ export const model = {
 
   methods: {
     list_tag_profiles: {
-      description: "list operation",
+      description:
+        "The organization's tag profiles. Open on every plan, including those without usage auditing.",
       arguments: z.object({
         page: z.number().optional(),
         page_size: z.number().optional(),
@@ -204,7 +213,7 @@ export const model = {
     },
     create_tag_profile: {
       description:
-        "Describe a recorded tag value. A value has at most one profile, so profiling it again is a 409.",
+        "Describe a recorded tag value. A value has at most one profile, so profiling it again is a 409. Only for organizations whose `can_audit_usage` is true; others get 403.",
       arguments: z.object({
         display_name: z.string().optional(),
         key: z.string().describe(
@@ -282,7 +291,8 @@ export const model = {
       },
     },
     get_tag_profile: {
-      description: "get operation",
+      description:
+        "One tag profile. Open on every plan, including those without usage auditing.",
       arguments: z.object({
         tag_profile_id: z.string(),
       }),
@@ -327,7 +337,8 @@ export const model = {
       },
     },
     update_tag_profile: {
-      description: "update operation",
+      description:
+        "Change a tag profile's display name or metadata. Only for organizations whose `can_audit_usage` is true; others get 403.",
       arguments: z.object({
         tag_profile_id: z.string(),
         display_name: z.string().optional().describe(
@@ -382,7 +393,8 @@ export const model = {
       },
     },
     delete_tag_profile: {
-      description: "delete operation",
+      description:
+        "Delete a tag profile. Open on every plan, including those without usage auditing.",
       arguments: z.object({
         tag_profile_id: z.string(),
       }),
@@ -419,7 +431,7 @@ export const model = {
     },
     list_tags: {
       description:
-        "The distinct tags reported for one key in a window, one per value, most recently seen first. `matched=false` lists the tags no enabled budget covers.",
+        "The distinct tags reported for one key in a window, one per value, most recently seen first. `matched=false` lists the tags no enabled budget covers. Only for organizations whose `can_audit_usage` is true; others get 403.",
       arguments: z.object({
         page: z.number().optional(),
         page_size: z.number().optional(),
