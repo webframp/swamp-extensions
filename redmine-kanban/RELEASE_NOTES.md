@@ -1,13 +1,6 @@
-## 2026.11.10.1
+## 2026.11.26.1
 
-**Changed:** Bump @webframp/redmine 2026.09.19.1 → 2026.11.03.1
-
-## 2026.10.21.1
-
-**Changed:** Documentation only: the README and the registry Quick Start now
-store the Redmine API key in a swamp vault (`swamp vault put redmine API_KEY`)
-and wire the `tracker` instance with `${{ vault.get("redmine", "API_KEY") }}`.
-The earlier examples passed `apiKey=YOUR_API_KEY`, which invited pasting the raw
-key onto the command line.
-
-**Upgrade note:** No code, workflow, report, or behavioral changes.
+**Fixed:** The `@webframp/scaffold-story` workflow had a non-UUID `id`
+(`scaffold-story-001`), so swamp printed `Skipping broken extension workflow ...
+id: Invalid UUID` on every `swamp workflow` command and never loaded the
+workflow. It now has a valid UUID `id` and loads.
