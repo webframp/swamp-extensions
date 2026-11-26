@@ -1349,6 +1349,8 @@ export const model = {
         },
       ) => {
         const { apiToken, version } = context.globalArgs;
+        // The spec declares no response body, but a create may still return the
+        // created entity, so the reply is stored; an empty reply is stored empty.
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2186,6 +2188,8 @@ export const model = {
         },
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
+        // The spec declares no response body, but a create may still return the
+        // created entity, so the reply is stored; an empty reply is stored empty.
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {

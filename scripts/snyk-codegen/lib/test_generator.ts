@@ -444,7 +444,8 @@ function generateExecutionTest(
   const args: Record<string, unknown> = { ...buildTestArgs(method) };
   for (const q of queries) args[q.field] = queryArgValue(method, q);
   const writesBody = method.type === "create" || method.type === "update" ||
-    (method.type === "action" && method.operation.requestBody !== undefined);
+    ((method.type === "action" || method.type === "delete") &&
+      method.operation.requestBody !== undefined);
   // The body is every argument that is neither a path nor a query field, so
   // derive it from the spec's request properties, mirroring the model's args.
   const bodyFields: Record<string, unknown> = {};

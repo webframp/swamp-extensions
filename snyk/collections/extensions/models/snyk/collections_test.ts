@@ -707,6 +707,7 @@ Deno.test({
         }
       >).delete_projects_collection.execute({
         "collection_id": "test-id-123",
+        "data": [],
       }, context);
       assertEquals(result.dataHandles.length, 0);
 
@@ -720,7 +721,8 @@ Deno.test({
       const query = new URLSearchParams(req0.search);
       assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
-      assertEquals(req0.body, null);
+      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertEquals(req0.body, { "data": [] });
 
       assertEquals(getWrittenResources().length, 0);
     } finally {

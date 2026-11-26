@@ -328,7 +328,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).delete_aliases_in_group.execute({}, context);
+      >).delete_aliases_in_group.execute({ "data": [] }, context);
       assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
@@ -338,7 +338,8 @@ Deno.test({
       const query = new URLSearchParams(req0.search);
       assertEquals(query.get("version"), "2026-09-09");
       assertEquals(req0.headers["authorization"], "token test-token");
-      assertEquals(req0.body, null);
+      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertEquals(req0.body, { "data": [] });
 
       assertEquals(getWrittenResources().length, 0);
     } finally {

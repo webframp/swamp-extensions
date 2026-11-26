@@ -131,9 +131,10 @@ const ListAssetsSchema = z.object({
   sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.record(z.string(), z.string()).nullish().describe(
-    "Explicitly defined, key:value pairs that are associated with an asset",
-  ),
+  tags: z.union([z.record(z.string(), z.string()), z.array(z.string())])
+    .nullish().describe(
+      "Explicitly defined, key:value pairs that are associated with an asset",
+    ),
   updated_at: z.string().nullish().describe("Last update timestamp"),
   assets_id: z.string().nullish().describe("Related assets ID"),
   organizations_id: z.string().nullish().describe("Related organizations ID"),
@@ -216,9 +217,10 @@ const GetAssetSchema = z.object({
   sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.record(z.string(), z.string()).nullish().describe(
-    "Explicitly defined, key:value pairs that are associated with an asset",
-  ),
+  tags: z.union([z.record(z.string(), z.string()), z.array(z.string())])
+    .nullish().describe(
+      "Explicitly defined, key:value pairs that are associated with an asset",
+    ),
   updated_at: z.string().nullish().describe("Last update timestamp"),
   assets_id: z.string().nullish().describe("Related assets ID"),
   organizations_id: z.string().nullish().describe("Related organizations ID"),
@@ -301,9 +303,10 @@ const RelatedAssetsItemSchema = z.object({
   sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.record(z.string(), z.string()).nullish().describe(
-    "Explicitly defined, key:value pairs that are associated with an asset",
-  ),
+  tags: z.union([z.record(z.string(), z.string()), z.array(z.string())])
+    .nullish().describe(
+      "Explicitly defined, key:value pairs that are associated with an asset",
+    ),
   updated_at: z.string().nullish().describe("Last update timestamp"),
   assets_id: z.string().nullish().describe("Related assets ID"),
   organizations_id: z.string().nullish().describe("Related organizations ID"),
@@ -577,6 +580,8 @@ export const model = {
         },
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
+        // The spec declares no response body, but a create may still return the
+        // created entity, so the reply is stored; an empty reply is stored empty.
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -610,7 +615,7 @@ export const model = {
         data: z.array(z.unknown()),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -624,11 +629,17 @@ export const model = {
         },
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
         await snykApi(
           apiToken,
           "DELETE",
           `/groups/${encodeURIComponent(groupId)}/assets/repository/aliases`,
           version,
+          body,
         );
 
         context.logger.info("Deleted resource {id}", { id: "unknown" });

@@ -65,8 +65,11 @@ export function resourceNameOf(
  * only honest output is zero data handles.
  *
  * - `delete`: never writes (an empty 204 is its success case).
- * - `create` / `update` / `action`: write only when the response has a body;
- *   a no-content write would persist `{}` under a dead instance name.
+ * - `update` / `action`: write only when the response has a body; a
+ *   no-content write would persist `{}` under a dead instance name.
+ * - `create`: always writes. A POST create returns the created entity even
+ *   when the spec omits or declares no response body (204), so the reply is
+ *   stored; an empty reply is stored as an empty resource.
  * - `get` / `list`: always write (a GET with no body would not have been
  *   classified as readable in the first place; a list always returns a page).
  */
@@ -277,7 +280,7 @@ export function generateModelSource(
   lines.push(``);
 
   // Generate response schemas
-  const schemaNames = generateResponseSchemas(methods, lines);
+  const schemaNames = generateResponseSchemas(methods, lines, config);
 
   // Model definition
   lines.push(
@@ -379,6 +382,7 @@ const OPEN_OBJECT = "z.object({}).passthrough()";
 function generateResponseSchemas(
   methods: ClassifiedMethod[],
   lines: string[],
+  config: ServiceConfig,
 ): Map<string, string> {
   const schemaNames = new Map<string, string>();
 
@@ -404,7 +408,10 @@ function generateResponseSchemas(
         "ItemSchema";
       const schema = listWriter.operation.responseSchema;
       const itemZod = schema
-        ? withPassthrough(schemaToZod(schema, { indent: 2, lenient: true }, 1))
+        ? acceptLegacyShapes(
+          withPassthrough(schemaToZod(schema, { indent: 2, lenient: true }, 1)),
+          config,
+        )
         : OPEN_OBJECT;
       lines.push(`const ${itemVarName} = ${itemZod};`);
       lines.push(``);
@@ -430,11 +437,14 @@ function generateResponseSchemas(
     let flatExpr: string | undefined;
     if (flatWriter) {
       const varName = toPascalCase(flatWriter.name) + "Schema";
-      let zodStr = withPassthrough(
-        schemaToZod(flatWriter.operation.responseSchema!, {
-          indent: 2,
-          lenient: true,
-        }, 1),
+      let zodStr = acceptLegacyShapes(
+        withPassthrough(
+          schemaToZod(flatWriter.operation.responseSchema!, {
+            indent: 2,
+            lenient: true,
+          }, 1),
+        ),
+        config,
       );
       // Swamp vaults only the fields a resource schema declares sensitive. A
       // secret another writer of this resource returns, but the schema (built
@@ -491,6 +501,21 @@ function generateResponseSchemas(
   return schemaNames;
 }
 
+/**
+ * Widen response fields whose shape changed between API versions so resources
+ * stored under the earlier shape still validate on read.
+ */
+function acceptLegacyShapes(zod: string, config: ServiceConfig): string {
+  let result = zod;
+  for (const { field, current, legacy } of config.legacyResponseShapes ?? []) {
+    result = result.replaceAll(
+      `${field}: ${current}`,
+      `${field}: z.union([${current}, ${legacy}])`,
+    );
+  }
+  return result;
+}
+
 /** Determine if a method's execute body references `args` */
 function methodUsesArgs(
   method: ClassifiedMethod,
@@ -500,7 +525,9 @@ function methodUsesArgs(
   if (type === "list") return true;
   if (operation.pathParams.length > 0) return true;
   if (type === "create" || type === "update") return true;
-  if (type === "action" && operation.requestBody) return true;
+  if ((type === "action" || type === "delete") && operation.requestBody) {
+    return true;
+  }
   if (operation.queryParams.length > 0) return true;
   // Check if path has secondary scope params that become args references
   const primaryParam = config.scope === "org"
@@ -864,7 +891,12 @@ function generateCreateBody(
   const qsSetup = querySetup(method.operation, indent);
   const qsSuffix = qsSetup ? "${qs}" : "";
 
-  return `${indent}    const body: Record<string, unknown> = {};
+  const noBodyNote = method.operation.hasResponseBody
+    ? ""
+    : `${indent}    // The spec declares no response body, but a create may still return the
+${indent}    // created entity, so the reply is stored; an empty reply is stored empty.\n`;
+
+  return `${noBodyNote}${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
     JSON.stringify(excludeNames)
   });
@@ -951,11 +983,29 @@ function generateDeleteBody(
   const qsSetup = querySetup(method.operation, indent);
   const qsSuffix = qsSetup ? "${qs}" : "";
 
-  return `${qsSetup}${indent}    await snykApi(
+  // A bulk delete carries the items to remove in its request body.
+  const hasBody = method.operation.requestBody !== undefined;
+  const excludeNames = [
+    ...method.operation.pathParams,
+    ...method.operation.queryParams,
+  ].map((p) => sanitizeFieldName(p.name));
+  const bodySetup = hasBody
+    ? `${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
+${indent}    }
+`
+    : "";
+  const bodyArg = hasBody ? `\n${indent}      body,` : "";
+
+  return `${bodySetup}${qsSetup}${indent}    await snykApi(
 ${indent}      apiToken,
 ${indent}      "DELETE",
 ${indent}      \`${apiPath}${qsSuffix}\`,
-${indent}      version,
+${indent}      version,${bodyArg}
 ${indent}    );
 ${indent}
 ${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });
