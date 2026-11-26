@@ -49,6 +49,11 @@ export interface GroupedOperation {
   requestBodyIsJsonApi: boolean;
   /** The JSON:API type value for request bodies (e.g., "team", "downtime") */
   requestBodyType?: string;
+  /**
+   * JSON:API `data` object that has no `attributes`: its own properties (for
+   * example `id`) sit beside `type`, so the body is `{data: {type, ...args}}`.
+   */
+  requestBodyIsResourceObject?: boolean;
   /** Whether the request body is a raw array (e.g., POST /v2/logs) */
   requestBodyIsArray: boolean;
   /**
@@ -274,6 +279,7 @@ function extractOperation(
   let requestBodyIsArray = false;
   let requestBodyArrayWrapper: string | undefined;
   let requestBodyType: string | undefined;
+  let requestBodyIsResourceObject = false;
   if (operation.requestBody?.content) {
     const jsonContent = operation.requestBody.content["application/json"];
     if (jsonContent?.schema) {
@@ -305,9 +311,24 @@ function extractOperation(
             }
           }
         } else {
-          // data exists but no attributes — use data's properties directly
-          requestBody = dataSchema;
+          // data exists but no attributes — its properties are sent beside
+          // `type`, not wrapped in `attributes`. A single-value `type` enum is
+          // fixed by the API, so it is sent as a constant, not asked for.
           requestBodyIsJsonApi = true;
+          requestBodyIsResourceObject = true;
+          requestBody = dataSchema;
+          if (dataSchema.properties?.type) {
+            const typeSchema = resolveSchema(spec, dataSchema.properties.type);
+            if (typeSchema.enum && typeSchema.enum.length === 1) {
+              requestBodyType = String(typeSchema.enum[0]);
+              const { type: _type, ...properties } = dataSchema.properties;
+              requestBody = {
+                ...dataSchema,
+                properties,
+                required: dataSchema.required?.filter((r) => r !== "type"),
+              };
+            }
+          }
         }
       } else if (
         fullBody.properties && Object.keys(fullBody.properties).length > 0
@@ -350,6 +371,7 @@ function extractOperation(
     requestBodyIsArray,
     requestBodyArrayWrapper,
     requestBodyType,
+    requestBodyIsResourceObject,
     responseSchema,
     hasSuccessResponseBody,
     isCollection,

@@ -355,7 +355,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_team.execute({ "name": "test-resource" }, context);
+      >).create_team.execute(
+        { "handle": "test-handle", "name": "test-name" },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -366,6 +369,12 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: {
+          "type": "team",
+          "attributes": { "handle": "test-handle", "name": "test-name" },
+        },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
@@ -488,10 +497,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).add_team_hierarchy_link.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).add_team_hierarchy_link.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -502,6 +508,7 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, { data: { "type": "team_hierarchy_links" } });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
@@ -1254,7 +1261,8 @@ Deno.test({
         }
       >).create_team_link.execute({
         "team_id": "test-id-123",
-        "name": "test-resource",
+        "label": "test-label",
+        "url": "test-url",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -1266,6 +1274,12 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: {
+          "type": "team_links",
+          "attributes": { "label": "test-label", "url": "test-url" },
+        },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);

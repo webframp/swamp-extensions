@@ -89,6 +89,7 @@ Deno.test("on-call model: has expected methods", () => {
   assertExists(model.methods.delete_on_call_escalation_policy);
   assertExists(model.methods.list_on_call_pages);
   assertExists(model.methods.get_on_call_page);
+  assertExists(model.methods.create_on_call_page_comment);
   assertExists(model.methods.list_on_call_schedules);
   assertExists(model.methods.create_on_call_schedule);
   assertExists(model.methods.get_on_call_schedule);
@@ -340,7 +341,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_on_call_escalation_policy.execute(
-        { "name": "test-resource" },
+        { "name": "test-name" },
         context,
       );
       assertEquals(result.dataHandles.length, 1);
@@ -353,6 +354,9 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: { "type": "policies", "attributes": { "name": "test-name" } },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
@@ -757,6 +761,66 @@ Deno.test({
 });
 
 Deno.test({
+  name: "on-call model: create_on_call_page_comment executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/comments": { body: null, status: 204 },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-on-call",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_on_call_page_comment.execute({
+        "page_id": "test-id-123",
+        "body": "test-body",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/test-id-123/comments");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: { "type": "comments", "attributes": { "body": "test-body" } },
+      });
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "on-call model: list_on_call_schedules fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -879,10 +943,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_on_call_schedule.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).create_on_call_schedule.execute({
+        "name": "test-name",
+        "time_zone": "test-time_zone",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -893,6 +957,12 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: {
+          "type": "schedules",
+          "attributes": { "name": "test-name", "time_zone": "test-time_zone" },
+        },
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);

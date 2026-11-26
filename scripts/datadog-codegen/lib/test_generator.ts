@@ -302,7 +302,8 @@ function generateExecutionTest(
   // regardless of the underlying method type. Deletes have their own branch
   // below (they never carry a JSON body / content-type).
   if (method.type !== "delete" && !methodWritesResource(method)) {
-    const noContentArgs = withName(method, testArgs);
+    const { args: noContentArgs, asserts: noContentBodyAsserts } =
+      jsonApiBodyCase(method, testArgs);
     const noContentHasBody = method.operation.requestBody !== undefined;
     return `Deno.test({
   name: "${config.name} model: ${method.name} executes successfully",
@@ -325,7 +326,7 @@ function generateExecutionTest(
     };
       assertEquals(result.dataHandles.length, 0);
 
-${reqAsserts(noContentHasBody)}
+${reqAsserts(noContentHasBody)}${noContentBodyAsserts}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 0);
@@ -430,7 +431,10 @@ ${reqAsserts(false)}
       : method.operation.isJsonApi
       ? { data: { ...fixture, id: "new-123" } }
       : { ...fixture, id: "new-123" };
-    const createArgs = withName(method, testArgs);
+    const { args: createArgs, asserts: resourceAsserts } = jsonApiBodyCase(
+      method,
+      testArgs,
+    );
     // A batch response has no top-level id, so the instance is keyed on the
     // parent path param ("created" without one); the request body must keep
     // the envelope around the array.
@@ -461,7 +465,7 @@ ${reqAsserts(false)}
       const result = await ${execCall(method.name, JSON.stringify(createArgs))};
       assertEquals(result.dataHandles.length, 1);
 
-${reqAsserts(true)}${batchAsserts}
+${reqAsserts(true)}${batchAsserts}${resourceAsserts}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
@@ -884,6 +888,41 @@ function withName(
   return method.operation.requestBodyArrayWrapper
     ? testArgs
     : { ...testArgs, name: "test-resource" };
+}
+
+/**
+ * Test args and body assertion for a write. A JSON:API body is sent verbatim,
+ * so the args are the body's required string fields (and no extra `name`) and
+ * the test checks the envelope: a resource object carries them beside `type`,
+ * any other JSON:API body nests them in `attributes`. Other bodies get the
+ * plain `name` arg and no body assertion.
+ */
+function jsonApiBodyCase(
+  method: ClassifiedMethod,
+  testArgs: Record<string, unknown>,
+): { args: Record<string, unknown>; asserts: string } {
+  const envelope = method.operation.requestBodyIsJsonApi;
+  const resourceObject = method.operation.requestBodyIsResourceObject;
+  const bodyFields: Record<string, unknown> = {};
+  for (const name of method.operation.requestBody?.required ?? []) {
+    const prop = method.operation.requestBody?.properties?.[name];
+    if (envelope && prop?.type === "string") bodyFields[name] = `test-${name}`;
+  }
+  if (!envelope || (!resourceObject && Object.keys(bodyFields).length === 0)) {
+    return { args: withName(method, testArgs), asserts: "" };
+  }
+  const type = method.operation.requestBodyType
+    ? { type: method.operation.requestBodyType }
+    : {};
+  const data = resourceObject
+    ? { ...type, ...bodyFields }
+    : { ...type, attributes: bodyFields };
+  return {
+    args: { ...testArgs, ...bodyFields },
+    asserts: `\n      assertEquals(req0.body, { data: ${
+      JSON.stringify(data)
+    } });`,
+  };
 }
 
 /** Build test args that include path param values */
