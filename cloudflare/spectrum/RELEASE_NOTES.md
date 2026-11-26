@@ -4,4 +4,6 @@
 
 **Added:** `list_spectrum_application_protocols`.
 
-**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Apart from the fix above, additive only.
+**Changed:** `create_spectrum_application_using_a_name_for_the_origin` changed argument type: `body`. `update_spectrum_application_configuration_using_a_name_for_the_origin` changed argument type: `body`.
+
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Callers of the methods listed under Changed must update their arguments. Other methods are unchanged.

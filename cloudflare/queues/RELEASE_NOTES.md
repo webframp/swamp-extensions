@@ -4,4 +4,4 @@
 
 **Removed:** `create_queues_preview_messages` and `create_queues_ack_preview_messages`, which the API replaced with the peek and extend methods.
 
-**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Callers of the removed methods must switch to the new ones.
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Apart from the fixes above, additive only.

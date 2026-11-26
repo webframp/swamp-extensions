@@ -4,4 +4,6 @@
 
 **Added:** `create_registrar_domain_discovery_transfer_check`.
 
-**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Apart from the fix above, additive only.
+**Changed:** `list` changed argument type: `sort_by`. `create` changed argument type: `contacts`, `privacy_mode`. `get` now calls `GET /registrar-sandbox/extensions/{extension}`; requires `extension`; no longer takes `domain_name`.
+
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Callers of the methods listed under Changed must update their arguments. Other methods are unchanged.
